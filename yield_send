@@ -1,0 +1,10 @@
+def fun():
+    for i in range(20):
+        x=yield i
+        print('good ', x)
+
+if __name__ == '__main__':
+    a=fun()
+    next(a)
+    a.__next__()
+    x=a.send(5)
