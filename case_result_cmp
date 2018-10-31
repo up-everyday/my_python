@@ -50,6 +50,7 @@ curs = conn.cursor()
 #test
 query = 'select * from caseinfo where caseid = ?'
 for key,value in test_dict.items():
+    ##Note: (key,)
     curs.execute(query,(key,))
     row = curs.fetchone()
     #result(caseid , reason , rootcause )
