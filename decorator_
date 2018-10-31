@@ -1,19 +1,73 @@
+#basic， f = w1(f)
+def w1(func):
+    def inner():
+        print("w1")
+        func()
+    return inner
+@w1 #f = w1(f),输入函数，返回新的函数
+def f1():
+    print("f1")
+def f2():
+    print("f2")
+if __name__ == '__main__':
+    f1()
+    f2()
+#with para and return value
 def w1(func):
     def inner(*args, **kwargs):
-        print("veify!!!")
-        return  func(*args, **kwargs)
+        print("before w1")
+        ret = func(*args, **kwargs)
+        print("after w1")
+        return ret
     return inner
-
 @w1
-def f1(x,y):
-    print("f1 ",x, y)
-@w1
-def f2(z):
-    print("f2 ", z,)
-@w1
-def f3(k=100):
-    print("f3", k)
+def f1(x):
+    print("f1 ", x)
+    return x + 1
+def f2():
+    print("f2")
 if __name__ == '__main__':
-    f1(1, 2)
-    f2(3)
-    f3(k=200)
+    ret = f1(1)
+    print("ret is ", ret)
+    f2()
+
+#with para and return value and decorator para
+def w1(*_args):
+    def _inner(func):
+        def inner(*args, **kwargs):
+            print("w1 _args is",*_args)
+            print("before w1")
+            ret = func(*args, **kwargs)
+            print("after w1")
+            return ret
+        return inner
+    return  _inner
+@w1('test')
+def f1(x):
+    print("f1 ", x)
+    return x + 1
+def f2():
+    print("f2")
+if __name__ == '__main__':
+    ret = f1(1)
+    print("ret is ", ret)
+    f2()
+#class decorator and with para and return value
+class c1(object):
+    def __init__(self, func):
+        self._func = func
+    def __call__(self, *args, **kwargs):
+        print('c1 before')
+        ret = self._func(*args, **kwargs)
+        print('c1 after')
+        return ret
+@c1
+def f1(x):
+    print("f1 ", x)
+    return x + 1
+def f2():
+    print("f2")
+if __name__ == '__main__':
+    ret = f1(1)
+    print("ret is ", ret)
+    f2()
