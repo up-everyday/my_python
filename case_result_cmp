@@ -1,0 +1,60 @@
+import sqlite3
+id_reason_dict =  {'78282_ft6140':
+                           'Validation not matched: 2-.*SYDB.*: field LAST_PC_STAT_1 is not matched: CLEAR<->ABYPC3\n2-.*SYDB.*: field LAST_PC_STAT_2 is not matched: ED3<->DRYPC3\n3-.*SIMDB.*: field QOS_LEVEL_STATUS is not matched: TP3QS1<->ABYQS3\n3-.*SIMDB.*: field QOS_LEVEL is not matched: 1<->3\n3-.*SIMDB.*: field LAST_PC_STATUS is not matched: CLEAR<->ABYPC3',
+                    '78282_ft5481':
+                            'Validation not matched: 3-.*SYDB.*: field LAST_PC_STAT_2 is not matched: DRPC2<->DRPC1',
+                    '78282_ft5472':
+                           "Failed to excute data with index=0 for error: Failed to get url http://10.112.17.110:8000/jenkins-api/api/rcv/SPA_ENWTPPS183_P38B9BDF7: ('timed out',)",
+                    '78282_ft5940':
+                           'Validation not matched: 0-.*AECIDB.*: field CONSUMED_PLI is not matched: 13000<->13001\n0-.*AECIDB.*: field TS_FOR_IN_FLIGHT_USG is not matched: 1.*<->0',
+                    '78282_ft5461':
+                           'Failed. The 7 check point: TRACE:Text_Process_Result match failed.',
+                    '78282_ft5469':
+                           'Validation not matched: 5-.*SYDB.*: field LAST_PC_STAT_4 is not matched: DRPC2<->DRPC1',
+                    '78282_ft5432':
+                           'Validation not matched: 5-.*SYDB.*: field LAST_PC_STAT_2 is not matched: DRPC2<->DRPC1',
+                    '78282_ft5452':
+                           'Failed. The 3 check point: TRACE:Notification_To_User match failed.',
+                    '78282_ft5460':
+                           'Failed. The 8 check point: TRACE:Text_Process_Result match failed.',
+                    '78282_ft5453':
+                           'Failed. The 5 check point: TRACE:Notification_To_User match failed.',
+                    '78282_ft5468':
+                           'Validation not matched: 5-.*SYDB.*: field LAST_PC_STAT_4 is not matched: DRPC2<->DRPC1',
+                    '78282_ft5470':
+                           'Validation not matched: 5-.*SYDB.*: field LAST_PC_STAT_4 is not matched: DRPC2<->DRPC1',
+                    '78282_ft6032':
+                           'Validation not matched: 0-.*SIMDB.*: field QOS_LEVEL_STATUS is not matched: ABS2<->TPS3\n0-.*SIMDB.*: field QOS_LEVEL is not matched: 2<->3\n0-.*SIMDB.*: field LAST_PC_STATUS is not matched: AB2<->TP3\n1-.*SYDB.*: field LAST_PC_STAT_1 is not matched: AB2<->TP3'
+                   }
+test_dict = {'78282_ft5472': "index=0 for error: Failed to get url http://10.112.17.110:8000/jenkins-api/api/rcv/SPA_ENWTPPS183_P38B9BDF7: ('timed out',)", '78282_ft5468': 'Validation not matched: 5-.*SYDB.*: field LAST_PC_STAT_4 is not matched: DRPC2<->DRPC1', '78282_ft6140': 'Validation not matched: 2-.*SYDB.*: field LAST_PC_STAT_1 is not matched: CLEAR<->ABYPC3\n2-.*SYDB.*: field LAST_PC_STAT_2 is not matched: ED3<->DRYPC3\n3-.*SIMDB.*: field QOS_LEVEL_STATUS is not matched: TP3QS1<->ABYQS3\n3-.*SIMDB.*: field QOS_LEVEL is not matched: 1<->3\n3-.*SIMDB.*: field LAST_PC_STATUS is not matched: CLEAR<->ABYPC3', '78282_ft5461': 'Failed. The 7 check point: TRACE:Text_Process_Result match failed.', '78282_ft5940': 'Validation not matched: 0-.*AECIDB.*: field CONSUMED_PLI is not matched: 13000<->13001\n0-.*AECIDB.*: field TS_FOR_IN_FLIGHT_USG is not matched: 1.*<->0', '78282_ft5481': 'Validation not matched: 3-.*SYDB.*: field LAST_PC_STAT_2 is not matched: DRPC2<->DRPC1', '78282_ft5432': 'Validation not matched: 5-.*SYDB.*: field LAST_PC_STAT_2 is not matched: DRPC2<->DRPC1', '78282_ft5453': 'Failed. The 5 check point: TRACE:Notification_To_User match failed.', '78282_ft6032': 'Validation not matched: 0-.*SIMDB.*: field QOS_LEVEL_STATUS is not matched: ABS2<->TPS3\n0-.*SIMDB.*: field QOS_LEVEL is not matched: 2<->3\n0-.*SIMDB.*: field LAST_PC_STATUS is not matched: AB2<->TP3\n1-.*SYDB.*: field LAST_PC_STAT_1 is not matched: AB2<->TP3', '78282_ft5452': 'Failed. The 3 check point: TRACE:Notification_To_User match failed.', '78282_ft5469': 'Validation not matched: 5-.*SYDB.*: field LAST_PC_STAT_4 is not matched: DRPC2<->DRPC1', '78282_ft5470': 'Validation not matched: 5-.*SYDB.*: field LAST_PC_STAT_4 is not matched: DRPC2<->DRPC1', '78282_ft5460': 'Failed. The 8 check point: TRACE:Text_Process_Result match failed.'}
+
+db_name = r'D:/daily_run/failedcase_id_reason.db'
+conn = sqlite3.connect(db_name)
+curs = conn.cursor()
+#create table
+# create_table = 'create table caseinfo (caseid text, reason text, rootcause text)'
+# curs.execute(create_table)
+
+#insert many records
+# insert_rec = 'insert into caseinfo values (?,?,?)'
+# for caseid, reason in id_reason_dict.items():
+#     curs.execute(insert_rec, (caseid, reason, 'Empty'))
+# conn.commit()
+
+#query
+# query = 'select * from caseinfo'
+# curs.execute(query)
+# #result(caseid text, reason text, rootcause text)
+# rows = curs.fetchall()
+
+#test
+query = 'select * from caseinfo where caseid = ?'
+for key,value in test_dict.items():
+    curs.execute(query,(key,))
+    row = curs.fetchone()
+    #result(caseid , reason , rootcause )
+    if value != row[1]:
+        ##78282_ft5472 diff
+        print(key,"###########", row)
+curs.close()
+conn.close()
