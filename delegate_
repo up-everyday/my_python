@@ -1,0 +1,39 @@
+class A:
+    def spam(self, x):
+        print('class A ', x)
+        pass
+    def foo(self):
+        pass
+
+class B:
+    def __init__(self):
+        self._a = A()
+    def bar(self):
+        pass
+    # Expose all of the methods defined on class A
+    def __getattr__(self, name):
+        return getattr(self._a, name)
+
+b = B()
+b.bar() # Calls B.bar() (exists on B)
+b.spam(42) # Calls B.__getattr__('spam') and delegates to A.spam
+
+
+##hasattr,getattr,setattr
+class Test():
+    name = 'class var'
+    def run(self):
+        print('class method')
+t = Test()
+res = hasattr(t, 'name')
+print(res)
+res = hasattr(t, 'run')
+print(res)
+res = getattr(t, 'name')
+print(res)
+res = getattr(t, 'run')
+print(res)
+res = setattr(t, 'age','18')
+print(res)
+res = getattr(t, 'age','18')
+print(res)
