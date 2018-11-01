@@ -1,0 +1,16 @@
+from abc import ABCMeta, abstractmethod
+class IStream(metaclass=ABCMeta):
+    @abstractmethod
+    def read(self, maxbytes=-1):
+        pass
+    @abstractmethod
+    def write(self, data):
+        pass
+class SocketStream(IStream):
+    def read(self, maxbytes=-1):
+        pass
+    #below notation will cause that TypeError: Can't instantiate abstract class SocketStream with abstract methods write
+    # def write(self, data):
+    #     pass
+
+s = SocketStream()
