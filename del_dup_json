@@ -1,0 +1,8 @@
+import json
+
+with open(r'D:/daily_run/CVM05_20181030.json', 'rt') as f:
+    result = json.load(f)
+
+with open(r'D:/daily_run/CVM05_20181030_bk.json', 'wt') as f:
+    result = list(set(result))
+    json.dump(result,f, indent=True)
