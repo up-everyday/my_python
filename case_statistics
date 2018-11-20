@@ -1,0 +1,129 @@
+import os
+import json
+import re
+from ftplib import FTP
+import sys
+import csv
+from functools import partial
+
+#get feature_list
+def get_feature_list(feature_list_file):
+    feature_list = []
+    with open(feature_list_file, 'rt') as f_feature:
+        data = f_feature.readlines()
+        tmp = data[0].split(',')
+        for case in tmp:
+            case = case.strip("' ") #the order of chars is not important
+            feature_list.append(case)
+    return feature_list
+
+
+
+#get already-ran case list
+def judeg_ran_list_file(filename):
+    if filename.endswith('.json'):
+        return filename
+def get_ran_caselist(feature_list_file):
+    ran_case_list = []
+    all_file_names = os.listdir(os.path.dirname(feature_list_file))
+
+    for filename in filter(judeg_ran_list_file, all_file_names): #iterator:
+        with open(filename, 'rt') as f:  #open json file
+            print("\n file name is %s\n" %filename)
+            tmp_data = json.load(f)
+        ran_case_list.extend(tmp_data)
+    return ran_case_list
+
+def ran_case_statistics(feature_list, ran_case_list):
+    feature_run_dict = {}
+    for feature in feature_list:
+        count = 0
+        for caseid in set(ran_case_list):
+            if feature in caseid:
+                count =  count + 1
+        feature_run_dict[feature]=count
+    return feature_run_dict
+
+class Caselist(object):
+    def __init__(self):
+        # CaseWebServerIp
+        self.case_list = []
+        self.file_list = []
+        self.ftp_server = "135.242.16.160"
+        self.myftp = FTP(self.ftp_server)
+        self.myftp.login()
+        print(self.myftp.getwelcome())
+    def gen_caselist(self, feature_list):
+        feature_status_dict = {}
+        feature_num_dict = {}
+        for i in range(len(feature_list)):
+            print("######current directory",self.myftp.pwd())
+            print("DftCase" + "/" + feature_list[i])
+            try:
+                self.myftp.cwd("/DftCase" + "/" + feature_list[i])  ##进入远程目录 e.g ftp://135.242.16.160/DftCase/77663/
+                feature_status_dict[feature_list[i]]='Y'
+            except Exception as e:
+                feature_status_dict[feature_list[i]] = 'N'
+                continue
+
+            self.file_list = self.myftp.nlst()  # Return a list of files in a given directory
+            self.case_list.clear()
+            for file_name in self.file_list:
+                if re.match(r"^[a-z]{2}\d{4}\.json$", file_name):
+                    self.case_list.append(feature_list[i] + '/' + file_name)
+            print("self.case_list ", self.case_list)
+            feature_num_dict[feature_list[i]] = len(self.case_list)
+
+            return (feature_status_dict, feature_num_dict)
+            # tmp_list = self.myftp.nlst()
+            # tmp = list()
+            # for file_name in tmp_list:
+            #     if re.match(r"^[a-z]{2}\d{4}\.json$", file_name):
+            #         tmp.append(feature_list[i] + '/' + file_name)
+            # print("tmp ", tmp)
+            # self.case_list.extend(tmp)
+            # feature_num_dict[feature_list[i]] = len(tmp)
+
+    def save_caselist(self,dest, ran_case_list):
+        self.myftp.quit  # 退出ftp
+        dir = os.path.dirname(dest)
+
+        #total_caselist
+        with open(dest,'w+') as f:
+            f.write(json.dumps(self.case_list, indent=True))
+        #unran_caselist
+        unrun_case_list = list(set(self.case_list) - set(ran_case_list))
+        with open(os.path.join(dir,'unran_caselist'),'w+') as f:
+            f.write(json.dumps(unrun_case_list, indent=True))
+
+
+def feature_info(feature_list_file, feature_list, feature_status_dict, feature_num_dict, feature_run_dict):
+    headers = ['Featur ID','exist or not', 'num of total', 'num of ran']
+    rows = []
+    for feature in feature_list:
+        if feature in feature_status_dict.keys():
+            tmp_dict = dict()
+            tmp_dict['Featur ID' ] = feature
+            tmp_dict['exist or not'] =feature_status_dict[feature]
+            if feature in feature_num_dict.keys():
+                tmp_dict['num of total'] = feature_num_dict[feature]
+            else:
+                tmp_dict['num of total'] = 0
+            tmp_dict['num of ran'] = feature_run_dict[feature]
+            rows.append(tmp_dict)
+    with open(os.path.join(os.path.dirname(feature_list_file),'feature_info.csv'),'w') as f:
+        f_csv = csv.DictWriter(f, headers)
+        f_csv.writeheader()
+        f_csv.writerows(rows)
+if __name__ =='__main__':
+    feature_list_file = r"/daily_run/caselist/feature_list.txt"
+    dest = os.path.join(os.path.dirname(feature_list_file), 'total_caselist')
+
+    feature_list = get_feature_list(feature_list_file)
+    ran_case_list = get_ran_caselist(feature_list_file)
+    feature_run_dict = ran_case_statistics(feature_list, ran_case_list)
+
+    caselist_inst = Caselist()
+    feature_status_dict, feature_num_dict = caselist_inst.gen_caselist(feature_list)
+    caselist_inst.save_caselist(dest, ran_case_list)
+    feature_info(feature_list_file, feature_list, feature_status_dict,feature_num_dict, feature_run_dict)
