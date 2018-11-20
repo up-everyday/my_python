@@ -29,7 +29,7 @@ def get_ran_caselist(feature_list_file):
 
     for filename in filter(judeg_ran_list_file, all_file_names): #iterator:
         with open(filename, 'rt') as f:  #open json file
-            print("\n file name is %s\n" %filename)
+            print("file name is '%s' " %filename)
             tmp_data = json.load(f)
         ran_case_list.extend(tmp_data)
     return ran_case_list
@@ -57,7 +57,6 @@ class Caselist(object):
         feature_status_dict = {}
         feature_num_dict = {}
         for i in range(len(feature_list)):
-            print("######current directory",self.myftp.pwd())
             print("DftCase" + "/" + feature_list[i])
             try:
                 self.myftp.cwd("/DftCase" + "/" + feature_list[i])  ##进入远程目录 e.g ftp://135.242.16.160/DftCase/77663/
@@ -71,10 +70,9 @@ class Caselist(object):
             for file_name in self.file_list:
                 if re.match(r"^[a-z]{2}\d{4}\.json$", file_name):
                     self.case_list.append(feature_list[i] + '/' + file_name)
-            print("self.case_list ", self.case_list)
             feature_num_dict[feature_list[i]] = len(self.case_list)
 
-            return (feature_status_dict, feature_num_dict)
+        return (feature_status_dict, feature_num_dict)
             # tmp_list = self.myftp.nlst()
             # tmp = list()
             # for file_name in tmp_list:
