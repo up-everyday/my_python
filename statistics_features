@@ -1,0 +1,30 @@
+feature_list_file = r"/daily_run/caselist/feature_list.txt"
+feature_list = []
+ran_file_list = []
+import os
+import json
+#get already-ran case list
+def judeg_ran_list_file(filename):
+    if filename.endswith('.json'):
+        return filename
+def get_ran_caselist(feature_list_file):
+    all_file_names = os.listdir(os.path.dirname(feature_list_file))
+    ran_file_list = list(filter(judeg_ran_list_file, all_file_names))
+    for filename in ran_file_list:
+        with open(filename, 'rt') as f:
+            ran_feature_orig = []
+            tmp_data = json.load(f)
+            for i in range(len(tmp_data)):
+                tmp_list = []
+                tmp_list = tmp_data[i].split('/')
+                ran_feature_orig.append(tmp_list[0])
+            print("file name is ## %s ##  case nums (%s)" % (filename, len(ran_feature_orig)))
+            ran_feature_set = set(ran_feature_orig)
+            ran_feature_list = list(ran_feature_set)
+            tmp_list_2 = []
+            for i in range(len(ran_feature_list)):
+                tmp_list_2.append(ran_feature_list[i].strip(" '"))
+            print("feature IDs are ",tmp_list_2)
+
+if __name__ == "__main__":
+    get_ran_caselist(feature_list_file)
