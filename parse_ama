@@ -1,3 +1,4 @@
+#the corresponding test file is BOU.181105_1119.deb
 import re
 from time import time
 def get_ama(log_name):
