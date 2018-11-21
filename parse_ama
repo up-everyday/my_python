@@ -1,0 +1,67 @@
+import re
+from time import time
+def get_ama(log_name):
+    ama_type = 'AMA_Other_Generation'
+    ama_str = ''
+    left_paren = 0
+    right_paren = 0
+    find_flag = False
+    unwanted_pattern = '[\n ]' #note bracket
+    split_pattern = ','
+    result_dict = {}
+    ama_record_list = []
+    with open(log_name, 'r') as f:
+        for line in f.readlines():
+            if line.find(ama_type) >= 0:
+                find_flag = True
+                ama_str = ''
+            if find_flag:
+                left_paren = left_paren + line.count('(')
+                right_paren = right_paren + line.count(')')
+                tmp = re.sub(unwanted_pattern,'', line)
+                ama_str = ama_str + tmp
+                if left_paren == right_paren:
+                    find_flag = False
+                    ama_record_list.append(ama_str)
+    print("origne ama_record_list ", ama_record_list)
+    return  ama_record_list
+
+def parse_ama(ama_record_list):
+    # right_paren_pos = ama_str.find('\)')??
+    for ama_rec in ama_record_list:
+        left_paren_pos_list = [match.start() for match in re.finditer('\(', ama_rec)]
+        print("left_paren_pos_list ", len(left_paren_pos_list))
+        all_fields_val_list = []
+        for i in range(len(left_paren_pos_list)):
+            print("before ama_str ", ama_rec)
+            match_obj = re.search('\)',ama_rec)
+            if (match_obj != None):
+                right_paren_pos = match_obj.start()
+                print("#####right_paren_pos is ", right_paren_pos)
+                left_paren_pos_list = [match.start() for match in re.finditer('\(',ama_rec[:right_paren_pos+1])]
+                content = ama_rec[left_paren_pos_list[-1]:right_paren_pos+1]
+                ama_rec = ama_rec.replace(content,'')
+                print("####content is ", content)
+                fields_val_list = content[1:-1].split(',')  #excluded '()'
+                #print(" fields_val_list ", fields_val_list)
+                print("####changed ama_str ", ama_rec)
+                all_fields_val_list.extend(fields_val_list)
+            else:
+                print("####final ama_str ", ama_rec)
+                all_fields_val_list.extend(fields_val_list)
+                print("####final all_fields_val_list ", all_fields_val_list)
+                break
+    return all_fields_val_list
+
+def display_ama(all_fields_val_list):
+    print("\n#############display_ama################")
+    for i in range(len(all_fields_val_list)):
+        print(all_fields_val_list[i])
+if __name__ == '__main__':
+    log_name = r"D:/CE/SPRDSR-1740/BOU_189/BOU.181105_1119.deb.test"
+    start = time()
+    ama_record_list = get_ama(log_name)
+    all_fields_val_list = parse_ama(ama_record_list[:])
+    display_ama(all_fields_val_list[:])
+    end = time()
+    print("time elapsed is ",(end - start))
