@@ -1,0 +1,14 @@
+import re
+
+ama_rec ='TRACE:AMA_Other_Generation(AMA_Generation_Record=AMA_Generation_rec(Always_Generate_AMA_Flag=false,Call_ID=DIAMETER_1_t5mtas91::3714222460:1:11,AMA_Request_Event_Label=127,AMA_Request_Event_Result=1,AMARG_Key=AMARG_Key_Type(AMA_Event_Label=Bucket_Refilling,AMA_Event_Result=Successful,Roaming=),AMARG_Check_Only_Flag=false,Home_Time_Zone=MET-01:00DST-02:00,83/02:00:00,300/03:00:00,GPRS_First_Partial_AMA=false,Original_Call_Charge_Buckets_Covered=false,Uncorrelated_CCRu_AMA_Flag=false,AMA_RR_SPL_Flag=false,Gen_3GPP_CDR_COSP_Level=))'''
+content = '(AMA_Event_Label=Bucket_Refilling,AMA_Event_Result=Successful,Roaming=)'
+
+print(ama_rec)
+print("content  ", content)
+tmp = "\(" + content[1:-1] +"\)"  #OK
+#tmp = '\({0}\)'.format(content[1:-1]) #OK
+print(tmp, "\n")
+ama_rec = re.sub(tmp,'',ama_rec)
+print("after ama_rec  \n", ama_rec)
+
+
