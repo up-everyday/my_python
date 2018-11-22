@@ -10,11 +10,9 @@ def get_ama(log_name):
     ama_record_list = []
     with open(log_name, 'r') as f:
         for line in f.readlines():
-            #if line.find(ama_type) >= 0:
             if re.search(ama_type,line) != None:
                 find_flag = True
                 ama_tmp_list = [] #init
-                ama_record = ''
             if find_flag:
                 left_paren = left_paren + line.count('(')
                 right_paren = right_paren + line.count(')')
@@ -25,7 +23,6 @@ def get_ama(log_name):
                     ama_record = ''.join(ama_tmp_list)
                     ama_record_list.append(ama_record)
     print("len of found ama_record_list ", len(ama_record_list))
-    print("found ama_record_list ", ama_record_list)
     return  ama_record_list
 
 def parse_ama(ama_record_list):
@@ -79,29 +76,19 @@ def parse_ama(ama_record_list):
             if res != None:
                 cont = res.group()
                 all_fields_val_list.append(cont)
-                print("####res is ", cont)
                 ama_rec = ama_rec.replace(cont, '')
-                print("###after ama_rec ", ama_rec)
         left_paren_pos_list = [match.start() for match in re.finditer('\(', ama_rec)]
-        #print("left_paren_pos_list ", len(left_paren_pos_list))
         for i in range(len(left_paren_pos_list)):
-            #print("before ama_str ", ama_rec)
             match_obj = re.search('\)',ama_rec)
             if (match_obj != None):
                 right_paren_pos = match_obj.start()
-                #print("#####right_paren_pos is ", right_paren_pos)
                 left_paren_pos_list = [match.start() for match in re.finditer('\(',ama_rec[:right_paren_pos+1])]
                 content = ama_rec[left_paren_pos_list[-1]:right_paren_pos+1]
                 ama_rec = ama_rec.replace(content,'')
-                #print("####content is ", content)
                 fields_val_list = content[1:-1].split(',')  #excluded '()'
-                #print(" fields_val_list ", fields_val_list)
-                #print("####changed ama_str ", ama_rec)
                 all_fields_val_list.extend(fields_val_list)
             else:
-                #print("####final ama_str ", ama_rec)
                 all_fields_val_list.extend(fields_val_list)
-                print("####final all_fields_val_list ", all_fields_val_list)
                 break
         all_ama_field_val_list.append(all_fields_val_list)
     return all_ama_field_val_list
