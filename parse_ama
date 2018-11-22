@@ -1,5 +1,6 @@
 import re
 from time import time
+import difflib
 def get_ama(log_name):
     ama_type = 'AMA_Other_Generation'
     left_paren = 0
@@ -9,7 +10,8 @@ def get_ama(log_name):
     ama_record_list = []
     with open(log_name, 'r') as f:
         for line in f.readlines():
-            if line.find(ama_type) >= 0:
+            #if line.find(ama_type) >= 0:
+            if re.search(ama_type,line) != None:
                 find_flag = True
                 ama_tmp_list = [] #init
                 ama_record = ''
@@ -22,7 +24,8 @@ def get_ama(log_name):
                     find_flag = False
                     ama_record = ''.join(ama_tmp_list)
                     ama_record_list.append(ama_record)
-    #print("found ama_record_list ", ama_record_list)
+    print("len of found ama_record_list ", len(ama_record_list))
+    print("found ama_record_list ", ama_record_list)
     return  ama_record_list
 
 def parse_ama(ama_record_list):
@@ -68,6 +71,7 @@ def parse_ama(ama_record_list):
                         Group_Counter_Allotment_Value_pattern,Discount_Expiration_Date_pattern,
                         Bundle_FF_Number_pattern, Pre_Event_Bkt_Reset_Val_pattern,
                         Post_Event_Bkt_Reset_Val_pattern, Max_Threshold_For_Bucket_pattern)
+    all_ama_field_val_list = []
     for ama_rec in ama_record_list:
         all_fields_val_list = []
         for pattern in special_patterns:
@@ -99,17 +103,26 @@ def parse_ama(ama_record_list):
                 all_fields_val_list.extend(fields_val_list)
                 print("####final all_fields_val_list ", all_fields_val_list)
                 break
-    return all_fields_val_list
+        all_ama_field_val_list.append(all_fields_val_list)
+    return all_ama_field_val_list
 
-def display_ama(all_fields_val_list):
-    print("\n#############display_ama################")
-    for i in range(len(all_fields_val_list)):
-        print(all_fields_val_list[i])
+def display_ama(all_ama_field_val_list):
+    for ame_rec in all_ama_field_val_list:
+        print("\n#############display_ama################")
+        for filed in ame_rec:
+            print(filed)
+def make_html(result_path, all_fields_val_list):
+    hd = difflib.HtmlDiff()
+    result = hd.make_file(all_fields_val_list[0], all_fields_val_list[1])
+    with open(result_path, 'w+') as f:
+        f.write(result)
 if __name__ == '__main__':
-    log_name = r"D:/CE/SPRDSR-1740/BOU_189/BOU.181105_1119.deb.test"
+    log_name = r"D:/CE/SPRDSR-1740/BOU_189/BOU.181105_1119.deb.log"
+    result_path =r"D:/python_work/text_book/ama_parse_result.html"
     start = time()
     ama_record_list = get_ama(log_name)
-    all_fields_val_list = parse_ama(ama_record_list[:])
-    display_ama(all_fields_val_list[:])
+    all_ama_field_val_list = parse_ama(ama_record_list[:])
+    display_ama(all_ama_field_val_list[:])
+    make_html(result_path, all_ama_field_val_list)
     end = time()
     print("time elapsed is ",(end - start))
