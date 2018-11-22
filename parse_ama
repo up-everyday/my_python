@@ -1,54 +1,101 @@
-#the corresponding test file is BOU.181105_1119.deb
 import re
 from time import time
 def get_ama(log_name):
     ama_type = 'AMA_Other_Generation'
-    ama_str = ''
     left_paren = 0
     right_paren = 0
     find_flag = False
     unwanted_pattern = '[\n ]' #note bracket
-    split_pattern = ','
-    result_dict = {}
     ama_record_list = []
     with open(log_name, 'r') as f:
         for line in f.readlines():
             if line.find(ama_type) >= 0:
                 find_flag = True
-                ama_str = ''
+                ama_tmp_list = [] #init
+                ama_record = ''
             if find_flag:
                 left_paren = left_paren + line.count('(')
                 right_paren = right_paren + line.count(')')
                 tmp = re.sub(unwanted_pattern,'', line)
-                ama_str = ama_str + tmp
+                ama_tmp_list.append(tmp)
                 if left_paren == right_paren:
                     find_flag = False
-                    ama_record_list.append(ama_str)
-    print("origne ama_record_list ", ama_record_list)
+                    ama_record = ''.join(ama_tmp_list)
+                    ama_record_list.append(ama_record)
+    #print("found ama_record_list ", ama_record_list)
     return  ama_record_list
 
 def parse_ama(ama_record_list):
-    # right_paren_pos = ama_str.find('\)')??
+    Pre_Call_EBucket_pattern = r'Pre_Call_EBucket_Value_rec=String_Rec\(.*?\)'
+    Post_Call_EBucket_pattern = r'Post_Call_EBucket_Value_rec=String_Rec\(.*?\)'
+    Pre_Call_CUC_Counter_pattern = r'Pre_Call_CUC_Counter_rec=String_Rec\(.*?\)'
+    Post_Call_CUC_Counter_pattern = r'Post_Call_CUC_Counter_rec=String_Rec\(.*?\)'
+    Bundle_Start_Date_pattern = r'Bundle_Start_Date_rec=String_Rec\(.*?\)'
+    Bundle_Period_End_Date_pattern = r'Bundle_Period_End_Date_rec=String_Rec\(.*?\)'
+    Bundle_Period_Start_Date_pattern = r'Bundle_Period_Start_Date_rec=String_Rec\(.*?\)'
+    Bundle_Period_Length_pattern = r'Bundle_Period_Length_rec=String_Rec\(.*?\)'
+    Family_Group_Service_Data_pattern = r'Family_Group_Service_Data_rec=String_Rec\(.*?\)'
+    Reference_Data_pattern = r'Reference_Data_rec=AMA_Reference_Data_rec\(.*?\)'
+    Bundle_AMA_Code_pattern = r'Bundle_AMA_Code_rec=String_Rec\(.*?\)'
+    Discount_Expiration_Date_pattern = r'Discount_Expiration_Date_rec=String_Rec\(.*?\)'
+    Pre_Event_Bkt_Reset_Val_pattern = r'Pre_Event_Bkt_Reset_Val_rec=String_Rec\(.*?\)'
+    Post_Event_Bkt_Reset_Val_pattern = r'Post_Event_Bkt_Reset_Val_rec=String_Rec\(.*?\)'
+    AOC_Tariff_ID_pattern = r'AOC_Tariff_ID=AOC_Tariff_rec\(.*?\)'
+    SPL_CounterThre_pattern = r'SPL_CounterThre_Rec=String_Rec\(.*?\)'
+    Revenue_Sharing_Cost_pattern = r'Revenue_Sharing_Cost_rec=Counter_Rec\(.*?\)'
+    Revenue_Sharing_Usage_Type_pattern = r'Revenue_Sharing_Usage_Type_rec=String_Six_Rec\(.*?\)'
+    Service_Data_pattern = r'Service_Data_rec=String_Rec\(.*?\)'
+    Changed_Counter_Value_pattern = r'Changed_Counter_Value_rec=String_Rec\(.*?\)'
+    Applied_Family_Group_ID_pattern = r'Applied_Family_Group_ID_rec=String_Rec\(.*?\)'
+    Asset_ID_pattern = r'Asset_ID_rec=String_Rec\(.*?\)'
+    Bundle_FF_Number_pattern = r'Bundle_FF_Number_rec=String_Four_Rec\(.*?\)'
+    Max_Threshold_For_Bucket_pattern = r'Max_Threshold_For_Bucket_rec=String_Rec\(.*?\)'
+    Group_Counter_Allotment_Value_pattern = r'Group_Counter_Allotment_Value_rec=String_Rec\(.*?\)'
+    Changed_Counter_Value_Mapped_pattern = r'Changed_Counter_Value_Mapped_rec=String_Rec\(.*?\)'
+    FG_Changed_Counter_Value_Mapped_pattern = r'FG_Changed_Counter_Value_Mapped_rec=String_Rec\(.*?\)'
+    Max_Neg_Threshold_For_Bucket_pattern = r'Max_Neg_Threshold_For_Bucket_rec=String_Rec\(.*?\)'
+    special_patterns = (Pre_Call_EBucket_pattern, Post_Call_EBucket_pattern,
+                        Family_Group_Service_Data_pattern, Reference_Data_pattern,
+                        Bundle_AMA_Code_pattern, Pre_Call_CUC_Counter_pattern,
+                        Post_Call_CUC_Counter_pattern, AOC_Tariff_ID_pattern,
+                        SPL_CounterThre_pattern, Revenue_Sharing_Cost_pattern,
+                        Revenue_Sharing_Usage_Type_pattern, Service_Data_pattern,
+                        Bundle_Start_Date_pattern, Bundle_Period_End_Date_pattern,
+                        Bundle_Period_Start_Date_pattern, Bundle_Period_Length_pattern,
+                        Changed_Counter_Value_pattern, Applied_Family_Group_ID_pattern,
+                        Asset_ID_pattern, Changed_Counter_Value_Mapped_pattern,
+                        FG_Changed_Counter_Value_Mapped_pattern, Max_Neg_Threshold_For_Bucket_pattern,
+                        Group_Counter_Allotment_Value_pattern,Discount_Expiration_Date_pattern,
+                        Bundle_FF_Number_pattern, Pre_Event_Bkt_Reset_Val_pattern,
+                        Post_Event_Bkt_Reset_Val_pattern, Max_Threshold_For_Bucket_pattern)
     for ama_rec in ama_record_list:
-        left_paren_pos_list = [match.start() for match in re.finditer('\(', ama_rec)]
-        print("left_paren_pos_list ", len(left_paren_pos_list))
         all_fields_val_list = []
+        for pattern in special_patterns:
+            res = re.search(pattern, ama_rec)
+            if res != None:
+                cont = res.group()
+                all_fields_val_list.append(cont)
+                print("####res is ", cont)
+                ama_rec = ama_rec.replace(cont, '')
+                print("###after ama_rec ", ama_rec)
+        left_paren_pos_list = [match.start() for match in re.finditer('\(', ama_rec)]
+        #print("left_paren_pos_list ", len(left_paren_pos_list))
         for i in range(len(left_paren_pos_list)):
-            print("before ama_str ", ama_rec)
+            #print("before ama_str ", ama_rec)
             match_obj = re.search('\)',ama_rec)
             if (match_obj != None):
                 right_paren_pos = match_obj.start()
-                print("#####right_paren_pos is ", right_paren_pos)
+                #print("#####right_paren_pos is ", right_paren_pos)
                 left_paren_pos_list = [match.start() for match in re.finditer('\(',ama_rec[:right_paren_pos+1])]
                 content = ama_rec[left_paren_pos_list[-1]:right_paren_pos+1]
                 ama_rec = ama_rec.replace(content,'')
-                print("####content is ", content)
+                #print("####content is ", content)
                 fields_val_list = content[1:-1].split(',')  #excluded '()'
                 #print(" fields_val_list ", fields_val_list)
-                print("####changed ama_str ", ama_rec)
+                #print("####changed ama_str ", ama_rec)
                 all_fields_val_list.extend(fields_val_list)
             else:
-                print("####final ama_str ", ama_rec)
+                #print("####final ama_str ", ama_rec)
                 all_fields_val_list.extend(fields_val_list)
                 print("####final all_fields_val_list ", all_fields_val_list)
                 break
