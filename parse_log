@@ -1,0 +1,35 @@
+import time
+import re
+def parse_log(file_name):
+    trace_pattern = r'TRACE:    '
+    exclued_patterns = (r'TRACE:      Initialize_Minute_Audit()',
+                        r'TRACE:      Initialize_UAS_Counter_AysnMsg_Queue()',
+                        r'TRACE:      AAFS_Refresh_Event_Type()',
+                        r'TRACE:      Initialize_LDAP_Request_Queue()'
+                        r'TRACE:      timer!expired(id=0)',
+                        r'TRACE:      Initialize_LDAP_Request_Queue()')
+    inclued_patterns = ['TRACE:      diameter!credit_control_request_received']
+    with open(file_name, 'rt') as f:
+        data = f.readlines()
+        print("len of data %s ", len(data))
+        content = list(map(str.strip,data))
+
+        for line in enumerate(content, start=1):
+            if re.search(trace_pattern, line[1]) != None:  #Trace
+                if line[1] not in exclued_patterns:
+                    #print("%s  %s"%(line[0], line[1]))
+                    #continue
+                    for pat in inclued_patterns:
+                        #print("pat is ", pat)
+                        #print("xxx is ", pat in line[1])
+                        #print("line[1] ", line[1])
+                        if pat in line[1]:
+                            print(line[0], line[1])
+
+
+if __name__ == '__main__':
+    start = time.time()
+    log_name = r"D:/CE/SPRDSR-1740/BOU_189/BOU.181105_1119.deb.test"
+    parse_log(log_name)
+    end = time.time()
+    print("elapsed time is ", (end-start))
