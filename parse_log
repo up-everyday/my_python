@@ -1,20 +1,32 @@
 import time
 import re
 def parse_log(file_name):
-    trace_pattern = r'TRACE:    '
+    trace_pattern = r'TRACE: '
     exclued_patterns = (r'TRACE:      Initialize_Minute_Audit()',
                         r'TRACE:      Initialize_UAS_Counter_AysnMsg_Queue()',
                         r'TRACE:      AAFS_Refresh_Event_Type()',
                         r'TRACE:      Initialize_LDAP_Request_Queue()'
                         r'TRACE:      timer!expired(id=0)',
                         r'TRACE:      Initialize_LDAP_Request_Queue()')
-    inclued_patterns = ['TRACE:      diameter!credit_control_request_received']
+    inclued_patterns = ['diameter!credit_control_request_received',
+                        'SIM_RTDB!read_completed','Counter_RTDB!read_completed'
+                        'SIM_RTDB!update','Counter_RTDB!update(',
+                        'AMA_Other_Generation','AMA_PS_Generation',
+                        ]
+    instance_id_pattern = r'TRACE:.*?\[\d{1,10}\]'
+    SIM_RTDB_pattern = r'SIM_RTDB!read_completed'
+    Counter_RTDB_pattern = r'Counter_RTDB!update\('
+    rtdb_key_pattern = r'SIM_Key=[\d]{1,20}'
+    counter_rtdb_key_pattern = r'CT_Key=[\dAL:]{1,40}'
     with open(file_name, 'rt') as f:
         data = f.readlines()
         print("len of data %s ", len(data))
         content = list(map(str.strip,data))
 
         for line in enumerate(content, start=1):
+            instance_str = ''
+            rtdb_str = ''
+            counter_rtdb_str = ''
             if re.search(trace_pattern, line[1]) != None:  #Trace
                 if line[1] not in exclued_patterns:
                     #print("%s  %s"%(line[0], line[1]))
@@ -24,8 +36,24 @@ def parse_log(file_name):
                         #print("xxx is ", pat in line[1])
                         #print("line[1] ", line[1])
                         if pat in line[1]:
+                            instance_str = ''.join(content[int(line[0])-4:int(line[0])-1])
+                            instance_cont = re.search(instance_id_pattern,instance_str)
+                            if instance_cont != None:
+                                instance_cont = instance_cont.group()
+                                print("####",instance_cont)
                             print(line[0], line[1])
-
+                    if SIM_RTDB_pattern in line[1]:
+                        rtdb_str = ''.join(content[int(line[0])-1:int(line[0])+2])
+                        key_id = re.search(rtdb_key_pattern,rtdb_str)
+                        if key_id != None:
+                            key_id= key_id.group()
+                            print("######", key_id)
+                    if Counter_RTDB_pattern in line[1]:
+                        counter_rtdb_str = ''.join(content[int(line[0])-1:int(line[0])+2])
+                        key_id = re.search(counter_rtdb_key_pattern,counter_rtdb_str)
+                        if key_id != None:
+                            key_id= key_id.group()
+                            print("######", key_id)
 
 if __name__ == '__main__':
     start = time.time()
@@ -33,3 +61,41 @@ if __name__ == '__main__':
     parse_log(log_name)
     end = time.time()
     print("elapsed time is ", (end-start))
+
+'''
+result is 
+#### TRACE: Diameter_PROT_FSM[556402]
+1488 TRACE:      diameter!credit_control_request_received(transaction_id=10,peer_h
+#### TRACE: PPS_SERVICE[556403]
+5965 TRACE:      SIM_RTDB!read_completed(instance=1,data=SIM_RTDB_fields(SIM_Key=4
+###### SIM_Key=420773289491
+26406 TRACE:     [556403]: Counter_RTDB!update(instance=8,data=Counter_RTDB_fields(
+27286 TRACE:     [556403]: Counter_RTDB!update(instance=8,data=Counter_RTDB_fields(
+#### TRACE: Diameter_PROT_FSM[556409]
+69651 TRACE:      diameter!credit_control_request_received(transaction_id=11,peer_h
+#### TRACE: PPS_SERVICE[556410]
+73295 TRACE:      SIM_RTDB!read_completed(instance=1,data=SIM_RTDB_fields(SIM_Key=4
+###### SIM_Key=420773289491
+#### TRACE: UTILITY_FSM[65537]
+94867 TRACE:      AMA_Other_Generation(AMA_Generation_Record=AMA_Generation_rec(Alw
+#### TRACE: UTILITY_FSM[65537]
+96512 TRACE:      AMA_Other_Generation(AMA_Generation_Record=AMA_Generation_rec(Alw
+98975 TRACE:     [556410]: Counter_RTDB!update(instance=8,data=Counter_RTDB_fields(
+99819 TRACE:     [556410]: Counter_RTDB!update(instance=8,data=Counter_RTDB_fields(
+#### TRACE: UTILITY_FSM[65537]
+145547 TRACE:      AMA_PS_Generation(AMA_Generation_Record=AMA_Generation_rec(Always
+#### TRACE: Diameter_PROT_FSM[556418]
+169624 TRACE:      diameter!credit_control_request_received(transaction_id=12,peer_h
+#### TRACE: PPS_SERVICE[556419]
+173066 TRACE:      SIM_RTDB!read_completed(instance=1,data=SIM_RTDB_fields(SIM_Key=4
+###### SIM_Key=420773289491
+#### TRACE: UTILITY_FSM[65537]
+198102 TRACE:      AMA_PS_Generation(AMA_Generation_Record=AMA_Generation_rec(Always
+#### TRACE: UTILITY_FSM[65537]
+199392 TRACE:      AMA_PS_Generation(AMA_Generation_Record=AMA_Generation_rec(Always
+210808 TRACE:     [556419]: Counter_RTDB!update(instance=8,data=Counter_RTDB_fields(
+elapsed time is  0.5460035800933838
+
+Process finished with exit code 0
+
+'''
