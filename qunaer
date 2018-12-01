@@ -131,8 +131,8 @@ if __name__ == '__main__':
              18, 106, 21, 41, 88,
              59, 70, 50]
 
-    #for province,page in zip(provinces[21:],pages[21:]):
-    for province, page in zip(provinces[20:21], pages[20:]):
+    for province,page in zip(provinces[21:],pages[21:]):
+    #for province, page in zip(provinces[20:21], pages[20:]):
         print('开始抓取%s' % province)
         df = pandas.DataFrame()
         for p in range(1,page+1):
@@ -140,7 +140,7 @@ if __name__ == '__main__':
             time.sleep(random.randint(2, 5))
             url = 'http://piao.qunar.com/ticket/list.htm?keyword=' + \
                   parse.quote(province) + \
-                  '&region=null&from=mpl_search_suggest&page=' + str(page)
+                  '&region=null&from=mpl_search_suggest&page=' + str(p)
             print(url)
             result_list = get_result_from_html(url)
             try:
@@ -149,7 +149,7 @@ if __name__ == '__main__':
             except Exception as e:
                 df = get_inf(url)
             print(df)
-        df.to_csv('qunaer.csv', index=False, mode='a', header=False,
+        df.to_csv('qunaer_hello.csv', index=False, mode='a', header=False,
                       columns=['add_pro', 'add_city', 'name', 'level', 'price', 'num', 'hot', 'descri'],
                       encoding='utf-8')
         time.sleep(60)
