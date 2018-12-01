@@ -1,6 +1,7 @@
 import time
 import re
 import json
+import os
 def care_str_pat(line_cont):
     SIM_RTDB_read_pattern = r'SIM_RTDB!read_completed'
     Counter_RTDB_read_pattern = r'Counter_RTDB!read_completed'
@@ -72,27 +73,29 @@ def parse_ama_rec(tmp_rec):
                         Post_Event_Bkt_Reset_Val_pattern, Max_Threshold_For_Bucket_pattern]
 
     all_fields_val_list = []
+    #deal with special pattern
     for pattern in special_patterns:
         res = re.search(pattern, tmp_rec)
         if res != None:
             cont = res.group()
             all_fields_val_list.append(cont)
             tmp_rec = tmp_rec.replace(cont, '')
-        left_paren_pos_list = [match.start() for match in re.finditer('\(', tmp_rec)]
-        for i in range(len(left_paren_pos_list)):
-            match_obj = re.search('\)',tmp_rec)
-            if (match_obj != None):
-                right_paren_pos = match_obj.start()
-                left_paren_pos_list = [match.start() for match in re.finditer('\(',tmp_rec[:right_paren_pos+1])]
-                content = tmp_rec[left_paren_pos_list[-1]:right_paren_pos+1]
-                tmp_rec = tmp_rec.replace(content,'')
-                fields_val_list = content[1:-1].split(',')  #excluded '()'
-                all_fields_val_list.extend(fields_val_list)
-            else:
-                all_fields_val_list.extend(fields_val_list)
-                break
+    #deal with common pattern
+    left_paren_pos_list = [match.start() for match in re.finditer('\(', tmp_rec)]
+    for i in range(len(left_paren_pos_list)):
+        match_obj = re.search('\)',tmp_rec)
+        if (match_obj != None):
+            right_paren_pos = match_obj.start()
+            left_paren_pos_list = [match.start() for match in re.finditer('\(',tmp_rec[:right_paren_pos+1])]
+            content = tmp_rec[left_paren_pos_list[-1]:right_paren_pos+1]
+            tmp_rec = tmp_rec.replace(content,'')
+            fields_val_list = content[1:-1].split(',')  #excluded '()'
+            all_fields_val_list.extend(fields_val_list)
+        else:
+            all_fields_val_list.extend(fields_val_list)
+            break
     return all_fields_val_list
-def save_recs(tmp_rec):
+def save_recs(tmp_rec, dir_name):
     if tmp_rec.find('SIM_RTDB!read_completed') != -1:
         pattern = r'SIM_RTDB_fields\(.*?\)'
         result = re.search(pattern, tmp_rec)
@@ -100,9 +103,9 @@ def save_recs(tmp_rec):
             cont = result.group()
             rtdb_rec = cont.split(',')
 
-        with open(r'D:/CE/VFCZ_SPRDSR-1740/BOU from initial state/sim_rtdb.log', 'a+t') as f:
+        with open(os.path.join(dir_name,'sim_rtdb.log'), 'a+t') as f:
             f.write("##########new recodes################")
-            f.write(json.dumps(rtdb_rec,indent='\n'))
+            f.write(json.dumps(rtdb_rec,indent=4))
 
     if tmp_rec.find('Counter_RTDB!read_completed') != -1:
         pattern = r'Counter_RTDB_fields\(.*?\)'
@@ -111,15 +114,15 @@ def save_recs(tmp_rec):
             cont = result.group()
             rtdb_rec = cont.split(',')
 
-            with open(r'D:/CE/VFCZ_SPRDSR-1740/BOU from initial state/counter_rtdb.log', 'a+t') as f:
+            with open(os.path.join(dir_name,'counter_rtdb.log'), 'a+t') as f:
                 f.write("##########new recodes################")
-                f.write(json.dumps(rtdb_rec,indent='\n'))
+                f.write(json.dumps(rtdb_rec,indent=4))
 
     if tmp_rec.find('AMA_Other_Generation') != -1 or tmp_rec.find('AMA_PS_Generation') != -1:
         all_fields_val_list = parse_ama_rec(tmp_rec)
-        with open(r'D:/CE/VFCZ_SPRDSR-1740/BOU from initial state/ama.log', 'a+t') as f:
+        with open(os.path.join(dir_name,'ama.log'), 'a+t') as f:
             f.write("##########new recodes################")
-            f.write(json.dumps(all_fields_val_list,indent='\n'))
+            f.write(json.dumps(all_fields_val_list,indent=4))
 
 def print_care_fields(tmp_rec):
     #print(tmp_rec)
@@ -146,7 +149,7 @@ def parse_log(file_name):
 
     instance_id_pattern = r'TRACE:.*?\[\d{1,10}\]'
 
-
+    dir_name = os.path.dirname(file_name)
     with open(file_name, 'rt') as f:
         data = f.readlines()
         print("len of data %s ", len(data))
@@ -179,11 +182,11 @@ def parse_log(file_name):
                     find_flag = False
                     tmp_rec = ''.join(counter_rec_tmp_list)
                     #print_care_fields(tmp_rec)
-                    save_recs(tmp_rec)
+                    save_recs(tmp_rec, dir_name)
 
 if __name__ == '__main__':
     start = time.time()
-    log_name = r"D:/CE/VFCZ_SPRDSR-1740/BOU from initial state/BOU_bp.181123_1627.deb"
+    log_name = r"D:/CE/VFCZ-SPRDSR-1789/Bndl_Renew_AMA_IN_SMS_ok_Bndl_Renew_AMA_IN_S.181128_1114.deb"
     parse_log(log_name)
     end = time.time()
     print("elapsed time is ", (end-start))
