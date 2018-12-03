@@ -6,18 +6,24 @@ def care_str_pat(line_cont):
     SIM_RTDB_read_pattern = r'SIM_RTDB!read_completed'
     Counter_RTDB_read_pattern = r'Counter_RTDB!read_completed'
     CCR_pattern = r'TRACE:      diameter!credit_control_request_received'
-    AMA_other_pattern = r'AMA_Other_Generation'
-    AMA_ps_pattern = r'AMA_PS_Generation'
+    AMA_Other_pattern = r'AMA_Other_Generation'
+    AMA_PS_pattern = r'AMA_PS_Generation'
+    AMA_CS_pattern = r'AMA_CS_Generation'
+    Setup_Diameter_Call_Type_pattern = r'P_CF!Setup_Diameter_Call_Type'
     if SIM_RTDB_read_pattern in line_cont:
         return 1 #SIM_RTDB_read_pattern
     elif Counter_RTDB_read_pattern in line_cont:
         return 2 #Counter_RTDB_read_pattern
     elif CCR_pattern in line_cont:
         return 3 #CCR_pattern
-    elif AMA_other_pattern in line_cont:
+    elif AMA_Other_pattern in line_cont:
         return 4
-    elif AMA_ps_pattern in line_cont:
-        return 4
+    elif AMA_PS_pattern in line_cont:
+        return 5
+    elif AMA_CS_pattern in line_cont:
+        return 6
+    elif Setup_Diameter_Call_Type_pattern in line_cont:
+        return 7
     else:
         return 0
 
@@ -118,26 +124,36 @@ def save_recs(tmp_rec, dir_name):
                 f.write("##########new recodes################")
                 f.write(json.dumps(rtdb_rec,indent=4))
 
-    if tmp_rec.find('AMA_Other_Generation') != -1 or tmp_rec.find('AMA_PS_Generation') != -1:
+    if tmp_rec.find('AMA_Other_Generation') != -1 or \
+                    tmp_rec.find('AMA_PS_Generation') != -1 or \
+                    tmp_rec.find('AMA_CS_Generation') != -1:
         all_fields_val_list = parse_ama_rec(tmp_rec)
         with open(os.path.join(dir_name,'ama.log'), 'a+t') as f:
             f.write("##########new recodes################")
             f.write(json.dumps(all_fields_val_list,indent=4))
 
 def print_care_fields(tmp_rec):
-    #print(tmp_rec)
+    #print("####tmp_rec is", tmp_rec)
     if "SIM_Key" in tmp_rec:
         care_fileds = [r'SIM_Key.*?,', r'Language.*?,']
     elif 'CT_Key'in tmp_rec:
         care_fileds = [r'CT_Key.*?,', r'Counter_ID_1.*?,']
     elif 'diameter!credit_control_request_received' in tmp_rec:
         care_fileds = [r'cc_request_number=[\d]{1,3}?', r'cc_request_type=diameter_crte.*?,']
+    elif 'AMA_Other_Generation' in tmp_rec or 'AMA_CS_Generation' in tmp_rec:
+        AMA_Event_Label_pattern = r'AMA_Event_Label=.*?,'
+        AMA_Event_Result_pattern = r'AMA_Event_Result=.*?,'
+        AMA_Request_Event_Label_pattern = r'AMA_Request_Event_Label=.*?,'
+        AMA_Request_Event_Result_pattern = r'AMA_Request_Event_Result=.*?,'
+        care_fileds = [AMA_Event_Label_pattern, AMA_Event_Result_pattern,
+                       AMA_Request_Event_Label_pattern, AMA_Request_Event_Result_pattern]
+
     else:
         care_fileds = []
     if len(tmp_rec) != 0:
         for field in care_fileds:
             result = re.findall(field, tmp_rec)
-            print("res",result)
+            print("     ", result)
 
 def parse_log(file_name):
     #get a record
@@ -181,12 +197,12 @@ def parse_log(file_name):
                 if left_paren == right_paren:
                     find_flag = False
                     tmp_rec = ''.join(counter_rec_tmp_list)
-                    #print_care_fields(tmp_rec)
+                    print_care_fields(tmp_rec)
                     save_recs(tmp_rec, dir_name)
 
 if __name__ == '__main__':
     start = time.time()
-    log_name = r"D:/CE/VFCZ-SPRDSR-1789/Bndl_Renew_AMA_IN_SMS_ok_Bndl_Renew_AMA_IN_S.181128_1114.deb"
+    log_name = r"D:/CE/VFCZ-SPRDSR-1789/20181203_after_1_bp/AMA_127.181130_1430.deb"
     parse_log(log_name)
     end = time.time()
     print("elapsed time is ", (end-start))
