@@ -2,9 +2,39 @@ import time
 import re
 import json
 import os
+def exclude_pat(line_cont):
+    if r'AAFS_Refresh_Event_Type' in line_cont:
+        return 1
+    elif r'Initialize_LDAP_Request_Queue' in line_cont:
+        return 2
+    elif r'Monitor_SwitchOver_Status'in line_cont:
+        return 3
+    elif r'Initialize_Minute_Audit'in line_cont:
+        return 4
+    elif r'timer!expired'in line_cont:
+        return 5
+    elif r'timer!allocated'in line_cont:
+        return 6
+    elif r'Request_Generate_COSP_Level_Measurement'in line_cont:
+        return 7
+    elif r'Initialize_UAS_Counter_AysnMsg_Queue'in line_cont:
+        return 8
+    elif r'RC_Table_Refresh'in line_cont:
+        return 9
+    elif r'time_out'in line_cont:
+        return 10
+    elif r'Heart_Beat_Request'in line_cont:
+        return 11
+    elif r'CPU_Overload_Monitor'in line_cont:
+        return 12
+
+    else:
+        return -1
 def care_str_pat(line_cont):
     SIM_RTDB_read_pattern = r'SIM_RTDB!read_completed'
+    SIM_RTDB_update_pattern = r'SIM_RTDB!update'
     Counter_RTDB_read_pattern = r'Counter_RTDB!read_completed'
+    Counter_RTDB_update_pattern = r'Counter_RTDB!update'
     CCR_pattern = r'TRACE:      diameter!credit_control_request_received'
     AMA_Other_pattern = r'AMA_Other_Generation'
     AMA_PS_pattern = r'AMA_PS_Generation'
@@ -12,8 +42,12 @@ def care_str_pat(line_cont):
     Setup_Diameter_Call_Type_pattern = r'P_CF!Setup_Diameter_Call_Type'
     if SIM_RTDB_read_pattern in line_cont:
         return 1 #SIM_RTDB_read_pattern
+    elif SIM_RTDB_update_pattern in line_cont:
+        return 1 #SIM_RTDB_read_pattern
     elif Counter_RTDB_read_pattern in line_cont:
         return 2 #Counter_RTDB_read_pattern
+    elif Counter_RTDB_update_pattern in line_cont:
+        return 2 #Counter_RTDB_update_pattern
     elif CCR_pattern in line_cont:
         return 3 #CCR_pattern
     elif AMA_Other_pattern in line_cont:
@@ -101,26 +135,32 @@ def parse_ama_rec(tmp_rec):
             all_fields_val_list.extend(fields_val_list)
             break
     return all_fields_val_list
-def save_recs(tmp_rec, dir_name):
-    if tmp_rec.find('SIM_RTDB!read_completed') != -1:
+def rtdb_pat_set(tmp_rec):
+    rtdb_found_flag = False
+    pattern = ''
+    rtdb_name = ''
+    if tmp_rec.find('SIM_RTDB!read_completed') != -1 or tmp_rec.find('SIM_RTDB!update(') != -1:
         pattern = r'SIM_RTDB_fields\(.*?\)'
-        result = re.search(pattern, tmp_rec)
-        if None != result:
-            cont = result.group()
-            rtdb_rec = cont.split(',')
-
-        with open(os.path.join(dir_name,'sim_rtdb.log'), 'a+t') as f:
-            f.write("##########new recodes################")
-            f.write(json.dumps(rtdb_rec,indent=4))
-
-    if tmp_rec.find('Counter_RTDB!read_completed') != -1:
+        rtdb_name = 'sim_rtdb.log'
+        rtdb_found_flag = True
+    elif tmp_rec.find('Counter_RTDB!read_completed') != -1 or \
+                    tmp_rec.find('Counter_RTDB!update(') != -1:
         pattern = r'Counter_RTDB_fields\(.*?\)'
-        result = re.search(pattern, tmp_rec)
-        if None != result:
-            cont = result.group()
-            rtdb_rec = cont.split(',')
-
-            with open(os.path.join(dir_name,'counter_rtdb.log'), 'a+t') as f:
+        rtdb_name = 'counter_rtdb.log'
+        rtdb_found_flag = True
+    return (rtdb_found_flag, pattern, rtdb_name)
+def parse_rtdb(tmp_rec, pattern):
+    result = re.search(pattern, tmp_rec)
+    if None != result:
+        cont = result.group()
+        rtdb_rec = cont.split(',')
+    return rtdb_rec
+def save_recs(tmp_rec, dir_name):
+    rtdb_found_flag, pattern, rtdb_name = rtdb_pat_set(tmp_rec)
+    if rtdb_found_flag:
+        rtdb_rec = parse_rtdb(tmp_rec, pattern)
+        if len(rtdb_rec) != 0:
+            with open(os.path.join(dir_name,rtdb_name), 'a+t') as f:
                 f.write("##########new recodes################")
                 f.write(json.dumps(rtdb_rec,indent=4))
 
@@ -161,7 +201,7 @@ def parse_log(file_name):
     right_paren = 0
     find_flag = False
     unwanted_pattern = '[\n ]' #note bracket
-    trace_pattern = r'TRACE: '
+    trace_pattern = r'TRACE:   '
 
     instance_id_pattern = r'TRACE:.*?\[\d{1,10}\]'
 
@@ -171,12 +211,17 @@ def parse_log(file_name):
         print("len of data %s ", len(data))
         content = list(map(str.strip,data))
 
+        first_trace_flag = False
         for line in enumerate(content, start=1):
             line_num, line_cont = line
 
             #get instanc id and trace
             if re.search(trace_pattern, line_cont) != None:  #Trace
-                if care_str_pat(line_cont):
+                ret = care_str_pat(line_cont)
+                ret_exclu =  exclude_pat(line_cont)
+                if ret == 3: #CCR_pattern, first trace:
+                    first_trace_flag = True
+                if ret or first_trace_flag and ret_exclu == -1:  ##recondider
                     instance_str = ''.join(content[line_num - 4:line_num - 1])
                     instance_cont = re.search(instance_id_pattern, instance_str)
                     if instance_cont != None:
@@ -198,11 +243,12 @@ def parse_log(file_name):
                     find_flag = False
                     tmp_rec = ''.join(counter_rec_tmp_list)
                     print_care_fields(tmp_rec)
+                    print("%%%%%%%",tmp_rec.find('SIM_RTDB!update('))
                     save_recs(tmp_rec, dir_name)
 
 if __name__ == '__main__':
     start = time.time()
-    log_name = r"D:/CE/VFCZ-SPRDSR-1789/20181203_after_1_bp/AMA_127.181130_1430.deb"
+    log_name = r"D:/CE/VFCZ-SPRDSR-1789/20181203_after_1_bp/AMA_127.181130_1430.deb.log"
     parse_log(log_name)
     end = time.time()
     print("elapsed time is ", (end-start))
