@@ -188,7 +188,7 @@ def get_id_reanson_dict(run_date, log_files, failed_case_list=[]):
     return caseid_failed_dict
 
 if __name__ == '__main__':
-    src = r"D:/daily_run/CHSP05A_CVM05/181101_081100"
+    src = r"D:/daily_run/CEVM01/181203_171003_r_1"
     run_date = re.split(r'[/\\]', src)[-1]
     failed_case_list = []
     caseid_failed_dict = OrderedDict()
