@@ -155,15 +155,24 @@ def parse_rtdb(tmp_rec, pattern):
         cont = result.group()
         rtdb_rec = cont.split(',')
     return rtdb_rec
+def save_rtdb_recs(tmp_rec, dir_name, pattern, rtdb_name):
+    if "SIM_Key" in tmp_rec:
+        key = r'SIM_Key.*?,'
+    elif 'CT_Key'in tmp_rec:
+        key = r'CT_Key.*?,'
+    else:
+        key = ''
+    if len(tmp_rec) != 0 and key:
+            result = re.findall(key, tmp_rec)
+            match = re.findall(r'=(.*?),', result[0])
+            print("4444",match[0])
+    file_name = rtdb_name + '-'+ match[0].replace(':','_')
+    rtdb_rec = parse_rtdb(tmp_rec, pattern)
+    if len(rtdb_rec) != 0:
+        with open(os.path.join(dir_name,file_name), 'a+t') as f:
+            f.write("##########new recodes################")
+            f.write(json.dumps(rtdb_rec,indent=4))
 def save_recs(tmp_rec, dir_name):
-    rtdb_found_flag, pattern, rtdb_name = rtdb_pat_set(tmp_rec)
-    if rtdb_found_flag:
-        rtdb_rec = parse_rtdb(tmp_rec, pattern)
-        if len(rtdb_rec) != 0:
-            with open(os.path.join(dir_name,rtdb_name), 'a+t') as f:
-                f.write("##########new recodes################")
-                f.write(json.dumps(rtdb_rec,indent=4))
-
     if tmp_rec.find('AMA_Other_Generation') != -1 or \
                     tmp_rec.find('AMA_PS_Generation') != -1 or \
                     tmp_rec.find('AMA_CS_Generation') != -1:
@@ -212,6 +221,7 @@ def parse_log(file_name):
         content = list(map(str.strip,data))
 
         first_trace_flag = False
+        rtdb_rec_count = 0
         for line in enumerate(content, start=1):
             line_num, line_cont = line
 
@@ -244,6 +254,11 @@ def parse_log(file_name):
                     tmp_rec = ''.join(counter_rec_tmp_list)
                     print_care_fields(tmp_rec)
                     print("%%%%%%%",tmp_rec.find('SIM_RTDB!update('))
+                    rtdb_found_flag, pattern, rtdb_name = rtdb_pat_set(tmp_rec)
+                    if rtdb_found_flag:
+                        rtdb_rec_count = rtdb_rec_count + 1
+                        rtdb_name = rtdb_name +'_' + str(rtdb_rec_count)
+                        save_rtdb_recs(tmp_rec, dir_name, pattern, rtdb_name)
                     save_recs(tmp_rec, dir_name)
 
 if __name__ == '__main__':
