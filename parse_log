@@ -183,11 +183,14 @@ def save_recs(tmp_rec, dir_name):
             f.write(json.dumps(all_fields_val_list,indent=4))
 
 def print_care_fields(tmp_rec):
-    #print("####tmp_rec is", tmp_rec)
     if "SIM_Key" in tmp_rec:
         care_fileds = [r'SIM_Key.*?,', r'Language.*?,']
     elif 'CT_Key'in tmp_rec:
         care_fileds = [r'CT_Key.*?,', r'Counter_ID_1.*?,']
+    # 'diameter!credit_control_request_received' also includes in p_cf , so it must be put here.
+    elif 'P_CF!Setup_Diameter_Call_Type' in tmp_rec:
+        #print("####tmp_rec",tmp_rec)
+        care_fileds = [r'CC_Request_Type=.*?,', r'CC_Request_Number=.*?,',r'Category_ID=.*?,', r'Status_Of_Call=.*?,']
     elif 'diameter!credit_control_request_received' in tmp_rec:
         care_fileds = [r'cc_request_number=[\d]{1,3}?', r'cc_request_type=diameter_crte.*?,']
     elif 'AMA_Other_Generation' in tmp_rec or 'AMA_CS_Generation' in tmp_rec:
