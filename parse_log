@@ -40,6 +40,7 @@ def care_str_pat(line_cont):
     AMA_PS_pattern = r'AMA_PS_Generation'
     AMA_CS_pattern = r'AMA_CS_Generation'
     Setup_Diameter_Call_Type_pattern = r'P_CF!Setup_Diameter_Call_Type'
+    imom_pattern = r'usli_request'
     if SIM_RTDB_read_pattern in line_cont:
         return 1 #SIM_RTDB_read_pattern
     elif SIM_RTDB_update_pattern in line_cont:
@@ -48,7 +49,7 @@ def care_str_pat(line_cont):
         return 2 #Counter_RTDB_read_pattern
     elif Counter_RTDB_update_pattern in line_cont:
         return 2 #Counter_RTDB_update_pattern
-    elif CCR_pattern in line_cont:
+    elif CCR_pattern in line_cont or imom_pattern in line_cont:
         return 3 #CCR_pattern
     elif AMA_Other_pattern in line_cont:
         return 4
@@ -253,7 +254,6 @@ def parse_log(file_name):
                     find_flag = False
                     tmp_rec = ''.join(counter_rec_tmp_list)
                     print_care_fields(tmp_rec)
-                    print("%%%%%%%",tmp_rec.find('SIM_RTDB!update('))
                     rtdb_found_flag, pattern, rtdb_name = rtdb_pat_set(tmp_rec)
                     if rtdb_found_flag:
                         rtdb_rec_count = rtdb_rec_count + 1
@@ -263,7 +263,7 @@ def parse_log(file_name):
 
 if __name__ == '__main__':
     start = time.time()
-    log_name = r"D:/CE/VFCZ-SPRDSR-1789/20181203_after_1_bp/AMA_127.181130_1430.deb.log"
+    log_name = r"D:/CE/VFGR-SPRDSR-1821/test_ama_1.log"
     parse_log(log_name)
     end = time.time()
     print("elapsed time is ", (end-start))
