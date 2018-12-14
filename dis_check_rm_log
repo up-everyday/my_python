@@ -1,0 +1,63 @@
+# -*- coding:utf-8 -*- -
+import os
+import sys
+def usage():
+	print('''
+	usage: get_cpu_disk_mem.py  <dirname> 
+	e.g. get_cpu_disk_mem.py /home/cedailyrun/log 
+	''')
+	sys.exit(1)
+def get_disk_usage(dirname):
+    statvfs = os.statvfs(dirname)
+    total_disk_space = statvfs.f_bsize * statvfs.f_blocks
+    avail_disk_space = statvfs.f_bsize * statvfs.f_bavail
+    used_disk_space = (total_disk_space - avail_disk_space) * 100.0 / total_disk_space
+    print("total_disk_space is %d" %total_disk_space)
+    print("avail_disk_space is %d" %avail_disk_space)
+    print("used_disk_space is %d" %int(used_disk_space))
+    return used_disk_space
+def rm_log(logpath):
+    dirs = os.listdir(logpath)
+    for dir in dirs:
+        dest_dir = os.path.join(logpath, dir,'SurepayDraft/result/')
+        #print("dest_dir is %s" % dest_dir)
+        if os.path.exists(dest_dir):
+            os.chdir(dest_dir)
+            cwd = os.getcwd()
+            rm_dirs = os.listdir(cwd)
+            rm_dirs.sort()
+            print("cwd is ", cwd)
+            for rm_dir in rm_dirs[:len(rm_dirs)-2]:
+                #print("rm_dir is ", os.path.join(cwd, rm_dir))
+                for root_rm, dirs_rm, files_rm in os.walk(rm_dir, topdown=False):
+                    #print("files_rm", os.path.join(cwd, root_rm, files_rm[0]))
+                    for name in files_rm:
+                        print("files_rm",os.path.join(cwd, root_rm, name))
+                        os.remove(os.path.join(cwd, root_rm, name))
+                    print("dirs_rm", root_rm, dirs_rm, files_rm)
+                    for name in dirs_rm:
+                        os.rmdir(os.path.join(cwd, root_rm, name)) #empty dir
+                print("11111dirs_rm", os.path.join(cwd, rm_dir))
+                rm_file = os.path.join(cwd, rm_dir)
+                if os.path.isdir(rm_file):
+                    os.rmdir(rm_file)
+                else:
+                    os.remove(rm_file)
+        else:
+            print("%s does not exist!" %dest_dir)
+if __name__ == '__main__':
+    logpath = '/home/cedailyrun/log'
+    if len(sys.argv) < 2:
+        usage()
+    dirs = sys.argv[1]
+    if os.path.exists(dirs):
+        used_disk_space = get_disk_usage(dirs)
+        print("logpath is ",  used_disk_space > 5)
+        if used_disk_space > 5:
+            print("logpath is ", logpath)
+            rm_log(logpath)
+    else:
+        print("%s does not exist!" %dirs)
+        sys.exit(1)
+
+
