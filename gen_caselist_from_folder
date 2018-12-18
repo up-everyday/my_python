@@ -1,0 +1,38 @@
+#!/usr/bin/python
+# -*- coding: UTF-8 -*-
+
+import os
+import re
+import json
+def gen_caselist_from_folder(dirname):
+    case_list = []
+    for root, dirs, files in os.walk(dirname, topdown=False):
+        for name in files:
+            if re.match(r"^[a-z]{2}\d{4}\.json$", name):
+                case_str = os.path.join(root, name)
+                #print(case_str)
+                case_str_li = re.split(r'[/\\]', case_str)
+                #print(case_str_li[-2:])
+                case_id = '/'.join(case_str_li[-2:])
+                case_list.append(case_id)
+    return case_list
+def save_caselist(case_list, dest):
+    with open(dest,'w+') as f:
+        f.write(json.dumps(case_list, indent=True))
+if __name__ == '__main__':
+    dirname = r'D:/work/20180312_SPID-471_SPID-472_feature/SurepayDraft20180315/dft_server'
+    file_fmt = 'D:/daily_run/VFCZ_caselist_{0}.json'
+    case_list = gen_caselist_from_folder(dirname)
+    kvm_num = 3
+    case_num = int(len(case_list)/kvm_num)
+    max_case_num = 250
+    if case_num < max_case_num:
+        for i in range(0,kvm_num):
+            print(i, case_num*i,case_num*(i+1))
+            print(file_fmt.format(i))
+            start = case_num * i
+            if i < kvm_num - 1: #starts from 0
+                stop = case_num * (i + 1)
+                save_caselist(case_list[start:stop], file_fmt.format(i))
+            else: #last
+                save_caselist(case_list[start:],file_fmt.format(i))
