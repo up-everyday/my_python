@@ -1,0 +1,5 @@
+[
+    {
+    "command": "curl http://135.251.249.250/hg/CTS/web_service/raw-file/tip/update.sh  | ksh"
+    }
+]
