@@ -5,6 +5,7 @@
 import paramiko
 import sys
 import time
+import threading
 
 def sendAndReceive(ssh, command, expect, searchReg = None):
     ssh.send("{0}\n".format(command))
@@ -38,7 +39,7 @@ def sendAndReceive(ssh, command, expect, searchReg = None):
     #
     # else:
     #     return True, buff
-def remote_run(hostname, User, password):
+def remote_run(hostname, User, Password):
     try:
         # 创建一个ssh客户端client对象
         ssh = paramiko.SSHClient()
@@ -46,7 +47,7 @@ def remote_run(hostname, User, password):
         ssh.load_system_host_keys()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         # 创建ssh连接
-        ssh.connect(hostname=hostname, username=User, password=password)
+        ssh.connect(hostname=hostname, username=User, password=Password)
         try:
             channel = ssh.invoke_shell()
             if User != 'root':
@@ -78,5 +79,7 @@ if __name__ == '__main__':
         usage()
     hostname = '135.242.106.251'
     User = 'ainet'
-    password = "ainet1"
-    remote_run(hostname, User, password)
+    Password = "ainet1"
+    restart_thread = threading.Thread(target=remote_run, args = (hostname, User, Password,))
+    restart_thread.start()
+    restart_thread.join()
