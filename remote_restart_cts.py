@@ -39,7 +39,7 @@ def sendAndReceive(ssh, command, expect, searchReg = None):
     #
     # else:
     #     return True, buff
-def remote_run(hostname, User, Password):
+def remote_run(hostname, User, Password, breakEvent):
     try:
         # 创建一个ssh客户端client对象
         ssh = paramiko.SSHClient()
@@ -66,7 +66,7 @@ def remote_run(hostname, User, Password):
         if ssh:
             # 关闭ssh连接
             ssh.close()
-
+        breakEvent.set()
 def usage():
     """
     Usage of cts in command line
@@ -74,12 +74,34 @@ def usage():
     print('Usage: {0} <IP> <Port> <User> <Password> <timeout> <command_list_file>'.format(sys.argv[0]))
     print('    Example: {0} 135.242.107.233 22 ainet ainet1 300 install_cts_commands'.format(sys.argv[0]))
     sys.exit(1)
+
+def heartBeat(timeout, breakEvent):
+    heartCount = 0
+    while heartCount < timeout:
+        print("heartCount ", heartCount)
+        if breakEvent.isSet():
+            break
+        time.sleep(1)
+        heartCount += 1
+    if not breakEvent.isSet():
+        print('Operation timeout, {0} seconds passed.'.format(timeout))
 if __name__ == '__main__':
     if len(sys.argv) != 1:
         usage()
     hostname = '135.242.106.251'
     User = 'ainet'
     Password = "ainet1"
-    restart_thread = threading.Thread(target=remote_run, args = (hostname, User, Password,))
+
+    breakEvent = threading.Event()
+
+    restart_thread = threading.Thread(target=remote_run, args = (hostname, User, Password, breakEvent))
+    # restart_thread.start()
+    # restart_thread.join()
+
+    restart_thread.setDaemon(True)
     restart_thread.start()
-    restart_thread.join()
+
+    timeout = 30
+    heart_thread = threading.Thread(target=heartBeat, args = (timeout, breakEvent,  ))
+    heart_thread.start()
+    heart_thread.join()
