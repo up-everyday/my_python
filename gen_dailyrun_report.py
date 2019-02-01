@@ -38,7 +38,7 @@ def gen_report_csv(files, result_csv_name):
                 result_str = suc_found[0] + ',' + fail_found[0] + ',' + total_found[0]
                 with open(result_csv_name, 'a') as f:
 		    f.write(run_date+',')
-		    f.write(result_str+',')
+		    f.write(result_str)
 		    #f.write(name)
 		    f.write("\n")
 if __name__ == '__main__':
