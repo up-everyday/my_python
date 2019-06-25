@@ -217,7 +217,7 @@ class Analyzer(object):
         regx_event_line = re.compile(r'^\s*TRACE:\s+([\w!_-]+)\(', re.I)
         regx_event_special = re.compile(r'^\s*TRACE:\s+\[\d+\]:\s+([\w!_-]+)\(', re.I)
         regx_internal_offset_form = re.compile(r'^\s*TRACE:\s+internal_offset_form', re.I)
-        regx_inst_start = re.compile(r'^\s*TRACE:\s*(Setup_IMOM_Call\w+|P_CF!Setup\w+)\([^\s]+', re.I)
+        regx_inst_start = re.compile(r'^\s*TRACE:\s*(Setup_IMOM_Call\w+|P_CF!Setup\w+|AMA_PS_Generation\w*|AMA_CS_Generation\w*|AMA_Other_Generation\w*)\([^\s]+', re.I)
         regx_event_param = re.compile(r'[(](.*)[)]', re.S)
         num = 0
         cur_inst = 0
