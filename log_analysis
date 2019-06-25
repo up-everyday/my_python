@@ -1,0 +1,766 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+import os
+import glob
+import io
+import re
+import json
+import sys
+import getopt
+import logging
+import difflib
+import collections
+
+class Call_Instance_Report(object):
+    """html report"""
+    HTML_TMPL = """
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <title>Log Analysis Call Instance Report</title>
+            <link href="http://libs.baidu.com/bootstrap/3.0.3/css/bootstrap.min.css" rel="stylesheet">
+            <h1 style="font-family: Microsoft YaHei">Log Analysis Summary</h1>
+            <h5>Success Log: %(s_log)s</h5>
+            <h5>Analyzed Log: %(a_log)s</h5>
+            <style type="text/css" media="screen">
+        body  { font-family: Microsoft YaHei,Tahoma,arial,helvetica,sans-serif;padding: 20px;}
+        </style>
+        </head>
+        <body>
+            <table id='call_instance_table' class="table table-condensed table-bordered table-hover">
+                <colgroup>
+                    <col align='left' />
+                    <col align='left' />
+                </colgroup>
+                <tr id='header_row' class="text-center success" style="font-weight: bold;font-size: 14px;">
+                    <th>Call_Instance : First_Event (Success Log)</th>
+                    <th>Call_Instance : First_Event (Analyzed Log)</th>
+                </tr>
+                %(call_instance_table)s
+            </table>
+        </body>
+        </html>"""
+    CALL_INSTANCE_TABLE_TMPL = """
+        <tr class='Event List Report'>
+            <td bgColor=%(color)s> <a href=%(event_html)s> %(s_instance)s </a></td>
+            <td bgColor=%(color)s> <a href=%(event_html)s> %(a_instance)s </a></td>
+        </tr>"""
+
+class Event_Report(object):
+    """html report"""
+    HTML_TMPL = """
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta http-equiv="X-UA-Compatible" content="IE=edge">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <title>Log Analysis Event Report</title>
+            <link href="http://ajax.aspnetcdn.com/ajax/bootstrap/3.3.4/css/bootstrap.min.css" rel="stylesheet">
+            <h1 style="font-family: Microsoft YaHei">Log Analysis Event and Event Parameter Report</h1>
+            <style type="text/css" media="screen">
+        body  { font-family: Microsoft YaHei,Tahoma,arial,helvetica,sans-serif;padding: 20px;}
+        </style>
+        </head>
+        <body>
+            <btn><a href='index.html'> Back to Call Instance Report</a> </btn>
+            <table id='call_instance_table' class="table table-condensed table-bordered table-hover">
+                <colgroup>
+                    <col align='left' />
+                    <col align='left' />
+                </colgroup>
+                <tr id='header_row' class="text-center success" style="font-weight: bold;font-size: 14px;">
+                    <th>Success Call Instance</th>
+                    <th>Analyzed Call Instance</th>
+                </tr>
+                %(call_instance_table)s
+            </table>
+            <table id='event_table' class="table table-condensed table-bordered table-hover">
+                <colgroup>
+                    <col align='left' />
+                    <col align='left' />
+                </colgroup>
+                <tr id='header_row' class="text-center success" style="font-weight: bold;font-size: 14px;">
+                    <th>Success Event List</th>
+                    <th>Analyzed Event List</th>
+                    <th>Event Parameter Compare Result</th>
+                </tr>
+                %(event_table)s
+            </table>
+            <btn><a href='index.html'> Back to Call Instance Report</a> </btn>
+            <script src="http://cdn.bootcss.com/jquery/1.11.3/jquery.min.js"></script>
+            <script src="http://cdn.bootcss.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
+        </body>
+        </html>"""
+    CALL_INSTANCE_TABLE_TMPL = """
+        <tr class='Event List Report'>
+            <td>%(s_instance)s</td>
+            <td>%(a_instance)s</td>
+        </tr>"""
+    EVENT_TABLE_TMPL = """
+        <tr class='Event List Report'>
+            <td bgColor=%(color)s>%(s_event)s</td>
+            <td bgColor=%(color)s>%(a_event)s</td>
+            <td> %(report)s </td>
+        </tr>"""
+
+class Analyzer(object):
+    def __init__(self, feature, case_id, log_name, console=None):
+        self.feature = feature
+        self.case_id = feature + '/' + case_id
+        self.log_file = log_name
+        self.console    = sys.stdout if console is None else console
+        self.log_server = '135.242.16.160'
+        self.mysql_server = '135.242.16.160'
+        self.db_user = 'root'
+        self.db_password = 'r00t'
+        self.db_name = 'cases_info_db'
+        self.table_name = 'log_info'
+        config_json = os.path.join(os.path.dirname(__file__), 'log_config.json')
+        try:
+            with io.open(config_json, 'rt') as file_io:
+                config_dict = json.load(file_io)
+                self.ignore_param_list = config_dict['ignore_param_list']
+                self.ignore_event_list = config_dict['ignore_event_list']
+        except Exception as e:
+            logger.warning('Load log_config.json failed: {0}'.format(e))
+
+    def getSuccessResult(self):
+        try:
+            conn = MySQLdb.connect(self.mysql_server, self.db_user, self.db_password, self.db_name, charset='utf8')
+            cur = conn.cursor()
+            sql = 'select * from {0} where case_id = "{1}" order by call_inst_id asc, event_id asc'.format(self.table_name, self.case_id)
+            cur.execute(sql)
+            conn.commit()
+            successValueList = list(cur.fetchall())
+        except Exception as e:
+            logger.warning('Error happened when get DB, error: {0}'.format(e))
+        finally:
+            cur.close()
+            conn.close()
+        if not successValueList:    # no success result within database
+            successLogFile = self.downloadPasslog()
+            successValueList = self.parseLog()
+            self.updateDB(successValueList)
+        return successValueList
+
+    def downloadPasslog(self):
+        local_caseid = self.case_id.replace('-', '_')
+        local_feature = self.feature.replace('-', '_')
+        localpath = os.getcwd() + '/tmp/'
+        if not os.path.isdir(localpath):
+            os.makedirs(localpath)
+        filelist = []
+        try:
+            myftp = FTP(self.log_server)
+        except:
+            logger.error("log server cannot login:" + str(self.log_server))
+        myftp.login()
+        myftp.cwd("DftLog" + "/" + self.feature)
+        tmplist = myftp.nlst()
+        for i in tmplist:
+            if local_caseid in i:
+                filelist.append(i)
+                break
+        if len(filelist) < 1:
+            logger.error("there is no pass case named {0} on FTP server".format(local_caseid))
+        for i in filelist:
+            (name, extension) = os.path.splitext(i)
+            if extension == ".log":
+                log_file = open(localpath + local_feature + "_" + local_caseid + "_passed.log", "wb")
+                myftp.retrbinary('RETR %s' % i, log_file.write)
+                log_file.close()
+                successCasePath = localpath + local_feature + "_" + local_caseid + "_passed.log"
+                break
+            elif extension == ".zip":
+                zip_file = open(localpath + local_feature + "_" + local_caseid + "_passed.zip", "wb")
+                myftp.retrbinary('RETR %s' % i, zip_file.write)
+                zip_file.close()
+                filepath = localpath + "/" + local_feature + "_" + local_caseid + "_passed.zip"
+                unzipfile = zipfile.ZipFile(filepath, "r")
+                for tmpfile in unzipfile.namelist():
+                    unzipfile.extract(tmpfile, localpath)
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+                command = 'find ' + localpath + ' -name "*' + local_caseid + '*.log" '
+                result_log = os.popen(command, 'r').read()
+                for log in result_log:
+                    if len(log) < len(localpath):
+                        continue
+                    else:
+                        successCasePath = log
+                break
+        return successCasePath
+
+    def updateDB(self, log_entry_list):
+        try:
+            conn = MySQLdb.connect(self.mysql_server, self.db_user, self.db_password, self.db_name, charset='utf8')
+            cur = conn.cursor()
+            insert_sql = 'insert into ' + self.table_name + ' values '
+            for value_entry in log_entry_list:
+                insert_sql = '{0} {1},'.format(insert_sql, str(value_entry))
+            insert_sql = insert_sql[:-1] + ';'    # replace ',' with ';' at the end of INSERT statement
+            cur.execute(insert_sql)
+            conn.commit()
+        except Exception as e:
+            logger.warning('Error happened when update DB, error: {0}'.format(e))
+        finally:
+            cur.close()
+            conn.close()
+
+    def parseLog(self, log_name):
+        # search string definition
+        regx_at_line = re.compile(r'at_line\s*:\s*(\d+)', re.I)
+        regx_instance = re.compile(r'trace:\s(\w+)\[(\d+)\]', re.I)
+        regx_event_line = re.compile(r'^\s*TRACE:\s+([\w!_-]+)\(', re.I)
+        regx_event_special = re.compile(r'^\s*TRACE:\s+\[\d+\]:\s+([\w!_-]+)\(', re.I)
+        regx_internal_offset_form = re.compile(r'^\s*TRACE:\s+internal_offset_form', re.I)
+        regx_inst_start = re.compile(r'^\s*TRACE:\s*(Setup_IMOM_Call\w+|P_CF!Setup\w+)\([^\s]+', re.I)
+        regx_event_param = re.compile(r'[(](.*)[)]', re.S)
+        num = 0
+        cur_inst = 0
+        cur_event = ''
+        orig_inst = []
+        event_index = 0
+        param_msg = []
+        event_found = 0
+        inst_index = 0
+        internal_offset_form_line = 0
+        all_log_info = []
+        one_log_info = []
+        with open(log_name, 'rb') as log_io:
+            for line in log_io.readlines():
+                num = num + 1
+                line = line.decode('cp437').strip()
+                if not line:  # empty line found
+                    cur_inst = 0  # reset current instance number, supposed the end of current event
+                    relation_inst_flag = False
+                    tmp_lines = []
+                    if event_found:    # there is no at_line within log, marked as the end of previous event and the begin of next event
+                        event_found = 0
+                        if param_msg:
+                            event_param = regx_event_param.search(''.join(param_msg)).group(1)
+                            primary_key = self.case_id + '_' + str(inst_index) + '_' + str(event_index)
+                            one_log_info = [self.case_id, inst_index, event_index, cur_event.encode('utf-8'), event_param.encode('utf-8'), primary_key]
+                            all_log_info.append(tuple(one_log_info))
+                            param_msg = []
+                    continue
+                res1 = regx_instance.search(line)  # instance number
+                if res1:
+                    if res1.group(1) != 'DROUTER_FSM':
+                        cur_inst = res1.group(2)
+                    continue
+                res2 = regx_inst_start.search(line)  # instance start
+                if res2:
+                    if cur_inst in orig_inst:
+                        event_index += 1
+                    else:
+                        event_index = 0
+                        orig_inst.append(cur_inst)
+                if num == internal_offset_form_line:
+                    internal_offset_form_line = 0
+                    regx_inst_start_1 = re.compile(r'^\s*(Setup_IMOM_Call\w+|P_CF!Setup\w+)\([^\s]+', re.I)
+                    res22 = regx_inst_start_1.search(line)  # instance start
+                    if res22:
+                        if cur_inst in orig_inst:
+                            event_index += 1
+                        else:
+                            event_index = 0
+                            orig_inst.append(cur_inst)
+                    regx_event = re.compile(r'^\s*([\w!_-]+)\(', re.I)
+                    res5 = regx_event.search(line)
+                    if res5:
+                        cur_event = res5.group(1)
+                        if cur_inst in orig_inst:
+                            inst_index = orig_inst.index(cur_inst)
+                            event_index += 1
+                            event_found = 1
+                res3 = regx_event_line.search(line)  # event found
+                res3_1 = regx_event_special.search(line)
+                if res3 or res3_1:
+                    if event_found:    # there is no at_line within log, marked as the end of previous event and the begin of next event
+                        event_found = 0
+                        if param_msg:
+                            event_param = regx_event_param.search(''.join(param_msg)).group(1)
+                            primary_key = self.case_id + '_' + str(inst_index) + '_' + str(event_index)
+                            one_log_info = [self.case_id, inst_index, event_index, cur_event.encode('utf-8'), event_param.encode('utf-8'), primary_key]
+                            all_log_info.append(tuple(one_log_info))
+                            param_msg = []
+                    if res3:
+                        cur_event = res3.group(1)
+                    else:
+                        cur_event = res3_1.group(1)
+                    if cur_inst in orig_inst:
+                        inst_index = orig_inst.index(cur_inst)
+                        event_index += 1
+                        event_found = 1
+                res4 = regx_internal_offset_form.search(line)
+                if res4:
+                    internal_offset_form_line = num+1
+                    continue
+                if event_found:
+                    res4 = regx_at_line.search(line)  # at_line found
+                    if res4:
+                        event_found = 0
+                        if param_msg:
+                            #event_param = ''.join(param_msg).strip('TRACE:').strip().strip(cur_event).lstrip('(').rstrip(')')
+                            event_param = regx_event_param.search(''.join(param_msg)).group(1)
+                            primary_key = self.case_id + '_' + str(inst_index) + '_' + str(event_index)
+                            one_log_info = [self.case_id, inst_index, event_index, cur_event.encode('utf-8'), event_param.encode('utf-8'), primary_key]
+                            all_log_info.append(tuple(one_log_info))
+                            param_msg = []
+                    else:
+                        param_msg.append(line)
+        return all_log_info, orig_inst
+
+    # Compare instance, event, event_parameter within log file
+    def compareResult(self, s_log_name, a_log_name, successLogList, successLogInst, anaLogList, anaLogInst):
+        successInst = len(successLogInst) #int(successLogList[-1][1])+1
+        anaInst = len(anaLogInst) #int(anaLogList[-1][1])+1
+        s_first_event_list = []
+        a_first_event_list = []
+        instance_dict = collections.OrderedDict()
+        mismatch_dict = collections.OrderedDict()
+        # get the first event for every instance
+        for index in range(successInst):
+            for successLog in successLogList:
+                if index == int(successLog[1]):
+                    s_first_event_list.append(successLog[3])
+                    break
+        for index in range(anaInst):
+            for anaLog in anaLogList:
+                if index == int(anaLog[1]):
+                    a_first_event_list.append(anaLog[3])
+                    break
+        logger.debug('s_inst_no:{0}, a_inst_no:{1}, s_inst_list:{2}, a_inst_list:{3}'.format(successInst, anaInst, s_first_event_list, a_first_event_list))
+        # get the difference for the first event of every instance
+        firstEventDiff = list(difflib.unified_diff(s_first_event_list, a_first_event_list))
+        if firstEventDiff:    # different instance list between success and analysis
+            mismatch_dict['Success'] = s_first_event_list
+            mismatch_dict['Analysis'] = a_first_event_list
+            instance_dict['Call_Instance_Compare'] = mismatch_dict
+            sameInstEventList, delInstEventList, addInstEventList, s_inst_index_list, a_inst_index_list = self.getSameList(firstEventDiff, s_first_event_list, a_first_event_list)
+            logger.error('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+            logger.error('!!!!!!!! Instance List Mismatch !!!!!!!!!!')
+            logger.error('!!!!!!!! Success:{0}'.format(s_first_event_list))
+            logger.error('!!!!!!!! Analysis:{0}'.format(a_first_event_list))
+            logger.error('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+            for s_instance in s_inst_index_list:
+                a_instance = a_inst_index_list[s_inst_index_list.index(s_instance)]
+                logger.debug('s_instance:{0}, a_instance:{1}'.format(s_instance, a_instance))
+                event_dict, result_event_list, mismatch_event_dict = self.compareEvent(successLogList, anaLogList, s_instance, a_instance, successLogInst, anaLogInst)
+                tmp_dict = collections.OrderedDict()
+                if mismatch_event_dict:
+                    tmp_dict['Event_Compare'] = mismatch_event_dict
+                else:
+                    tmp_dict['Event_Compare'] = 'Matched'
+                if result_event_list:
+                    tmp_dict['Event_Param_Compare'] = result_event_list#event_dict
+                else:
+                    tmp_dict['Event_Param_Compare'] = 'Matched'
+                if tmp_dict:
+                    instance_dict['instance:'+anaLogInst[a_instance]] = tmp_dict
+        else:    # same instance list between success and analysis
+            instance_dict['Call_Instance_Compare'] = 'Matched'
+            instance_dict['Call_Instance_List'] = s_first_event_list
+            for instance in range(successInst):    # now compare instance one by one
+                event_dict, result_event_list, mismatch_event_dict = self.compareEvent(successLogList, anaLogList, instance, instance, successLogInst, anaLogInst)
+                tmp_dict = collections.OrderedDict()
+                if mismatch_event_dict:
+                    tmp_dict['Event_Compare'] = mismatch_event_dict
+                else:
+                    tmp_dict['Event_Compare'] = 'Matched'
+                if result_event_list:
+                    tmp_dict['Event_Param_Compare'] = result_event_list#event_dict
+                else:
+                    tmp_dict['Event_Param_Compare'] = 'Matched'
+                if tmp_dict:
+                    instance_dict['instance:'+anaLogInst[instance]] = tmp_dict
+        logger.warning('Instance_dict: {0}'.format(instance_dict))
+        #try:
+        #    with io.open('analysis_output.json', 'wb') as json_file:
+        #        json_file.write(json.dumps(instance_dict, indent=4, separators=(', ', ': ')))
+        #        json_file.flush()
+        #except Exception as e:
+        #    logger.warning('Write analysis_output.json failed: {0}'.format(e))
+
+        # generate call instance report
+        s_html_list, a_html_list = self.getReportList(firstEventDiff, s_first_event_list, a_first_event_list)
+        main_html = Call_Instance_Report()
+        call_instance_table = ''
+        s_index = 0
+        a_index = 0
+        for i in range(len(s_html_list)):
+            color = ''
+            event_html = '#'    # '#' means just this html page
+            s_html = ''
+            a_html = ''
+            if not s_html_list[i]:    # newly added event within analysis log
+                color = '#A9F5A9'
+                a_html = '{0} : {1}'.format(anaLogInst[a_index], a_html_list[i])
+                a_index += 1
+            elif not a_html_list[i]:    # event only occurred within success log
+                color = 'pink'
+                s_html = '{0} : {1}'.format(successLogInst[s_index], s_html_list[i])
+                s_index += 1
+            if color == '':
+                event_html = 'EventReport_' + str(s_index) + '.html'
+                a_html = '{0} : {1}'.format(anaLogInst[a_index], a_html_list[i])
+                s_html = '{0} : {1}'.format(successLogInst[s_index], s_html_list[i])
+                s_index += 1
+                a_index += 1
+            call_instance_entry = main_html.CALL_INSTANCE_TABLE_TMPL % dict(s_instance=s_html, a_instance=a_html, event_html=event_html, color=color)
+            call_instance_table += call_instance_entry
+        output = main_html.HTML_TMPL % dict(s_log=s_log_name, a_log=a_log_name, call_instance_table=call_instance_table)
+        try:
+            with open('index.html','wb') as f:
+                f.write(output.encode('utf-8'))
+        except Exception as e:
+            logger.warning('Write index.html failed: {0}'.format(e))
+
+
+    # compare event, event parameter within log file
+    def compareEvent(self, successLogList, anaLogList, s_instance, a_instance, successLogInst, anaLogInst):
+        successEventList = []
+        successEventParamList = []
+        anaEventList = []
+        anaEventParamList = []
+        mismatch_dict = collections.OrderedDict()
+        event_dict = collections.OrderedDict()
+        result_event_list = []
+        logger.warning('-----------------    Begin Analysis For Instance: {0}    -----------------'.format(anaLogInst[a_instance]))
+        for successLog in successLogList:
+            if s_instance == int(successLog[1]):
+                successEventList.append(successLog[3])
+                successEventParamList.append(successLog[4])
+        for anaLog in anaLogList:
+            if a_instance == int(anaLog[1]):
+                anaEventList.append(anaLog[3])
+                anaEventParamList.append(anaLog[4])
+        eventDiff = list(difflib.unified_diff(successEventList, anaEventList))
+        logger.debug('Event: diff:{0}, s:{1}, a:{2}'.format(eventDiff, successEventList, anaEventList))
+
+        # prepare to generate event list html report
+        s_html_list, a_html_list = self.getReportList(eventDiff, successEventList, anaEventList)
+        event_html = Event_Report()
+        event_table = ''
+        call_instance_entry = event_html.CALL_INSTANCE_TABLE_TMPL % dict(s_instance=successLogInst[s_instance], a_instance=anaLogInst[a_instance])
+
+        if eventDiff:    # different event exist between success and analysis
+            if anaEventList[0] == successEventList[0]:    # compare the first event within the instance
+                sameEventList, delEventList, addEventList, s_index_list, a_index_list = self.getSameList(eventDiff, successEventList, anaEventList)
+                logger.warning('EventChange: Success:{0}, Analysis:{1}'.format(delEventList, addEventList))
+                mismatch_dict['Success'] = delEventList
+                mismatch_dict['Analysis'] = addEventList
+                eventDiff.pop(0)
+                eventDiff.pop(0)
+                mismatch_dict['Different'] = eventDiff
+                event_dict['Event_Mismatch'] = mismatch_dict
+                for index in range(len(sameEventList)):
+                    event_param_dict = collections.OrderedDict()
+                    s_param_list = self.splitEventParam(successEventParamList[s_index_list[index]].split(','))
+                    a_param_list = self.splitEventParam(anaEventParamList[a_index_list[index]].split(','))
+                    deltaEventParamList = list(difflib.unified_diff(s_param_list, a_param_list))
+                    if deltaEventParamList:
+                        sameList, delList, addList, s_param_index_list, a_param_index_list = self.getSameList(deltaEventParamList, s_param_list, a_param_list)
+                        d_list, s_list, a_list = self.getDiffList(delList, addList)
+                        logger.warning('EventParamMismatch: Event:{0}, Success:{1}, Analysis:{2}, Diff:{3}'.format(anaEventList[a_index_list[index]], s_list, a_list, d_list))
+                        if d_list:
+                            if anaEventList[a_index_list[index]] in self.ignore_event_list:
+                                logger.warning('Event:{0} Diff Param: {1} ignored'.format(anaEventList[a_index_list[index]], d_list))
+                                result_event_list.append([anaEventList[index], 'Matched'])
+                            else:
+                                for diffParam in d_list:
+                                    event_param_dict[diffParam[0]] = diffParam[1]
+                                result_event_list.append([anaEventList[a_index_list[index]], d_list])
+                                event_dict[anaEventList[a_index_list[index]]] = event_param_dict
+                        else:
+                            result_event_list.append([anaEventList[a_index_list[index]], 'Matched'])
+                    else:
+                        result_event_list.append([anaEventList[a_index_list[index]], 'Matched'])
+
+                        logger.debug('DiffEvent: s_event:{0}, a_event:{1}'.format(successEventList[s_index_list[index]], anaEventList[a_index_list[index]]))
+                logger.warning('DiffEvent Dict:{0}'.format(event_dict))
+            else:
+                logger.warning('NO need to compare CallInstance:{0}, Success:{1}, Analysis:{2}'.format(anaLogInst[a_instance], successEventList[0], anaEventList[0]))
+        else:    # same event list between success and anlysis
+            for index in range(len(successEventList)):
+                event_param_dict = collections.OrderedDict()
+                s_param_list = self.splitEventParam(successEventParamList[index].split(','))
+                a_param_list = self.splitEventParam(anaEventParamList[index].split(','))
+                deltaEventParamList = list(difflib.unified_diff(s_param_list, a_param_list))
+                if deltaEventParamList:
+                    sameList, delList, addList, s_param_index_list, a_param_index_list = self.getSameList(deltaEventParamList, s_param_list, a_param_list)
+                    d_list, s_list, a_list = self.getDiffList(delList, addList)
+                    logger.warning('EventParamMismatch: Event:{0}, Success:{1}, Analysis:{2}, Diff:{3}'.format(anaEventList[index], s_list, a_list, d_list))
+                    if d_list:
+                        if anaEventList[index] in self.ignore_event_list:
+                            logger.warning('Event:{0} Diff Param: {1} ignored'.format(anaEventList[index], d_list))
+                            result_event_list.append([anaEventList[index], 'Matched'])
+                        else:
+                            for diffParam in d_list:
+                                event_param_dict[diffParam[0]] = diffParam[1]
+                            result_event_list.append([anaEventList[index], d_list])
+                            event_dict[anaEventList[index]] = event_param_dict
+                    else:
+                        result_event_list.append([anaEventList[index], 'Matched'])
+                else:
+                    result_event_list.append([anaEventList[index], 'Matched'])
+                    logger.debug('SameEvent: s_event:{0}, a_event:{1}'.format(successEventList[index], anaEventList[index]))
+            logger.warning('SameEvent Dict:{0}'.format(event_dict))
+                #eventParamZipped = zip(successEventParamList[index].split(','), anaEventParamList[index].split(','))
+                #deltaEventParamList = filter(self.getFiltered, eventParamZipped)    # compare event parameter
+                #if deltaEventParamList:
+                #    for deltaEventParam in deltaEventParamList:
+                #        logger.warning('EventParamMismatch: Event: {0}, Success: {1}, Analysis: {2}'.format(anaEventList[index], deltaEventParam[0], deltaEventParam[1]))
+
+        # generate event list html report
+        TABLE = lambda x, y, z: '<table class="table table-hover table-condensed {tclass}">{thead}\n{tbody}\n' \
+                             '</table>'.format(thead=x, tbody=y, tclass=z)
+        THEAD = lambda x: '<thead>\n{tr}\n</thead>'.format(tr=x)
+        TBODY = lambda x: '<tbody>\n{trs}\n</tbody>'.format(trs='\n'.join(x))
+        TR = lambda x, y: '<tr class="{tr_class}">\n{tr}\n</tr>'.format(tr=y, tr_class=x)
+        TH = lambda x: '\n'.join(map(lambda y: '<th>{th}</th>'.format(th=y), x))
+        MODAL = lambda x, y, z: '                <div class="modal fade" id="{id}" tabindex="-1" role="dialog" aria-hidden="true"> \n' \
+                                     '                <div class="modal-dialog modal-lg">\n'\
+                                     '                <div class="modal-content">\n' \
+                                     '                <div class="modal-header">\n ' \
+                                     '                <button type="button" class="close" data-dismiss="modal" aria-label="Close">' \
+                                     '                <span aria-hidden="true">&times;</span></button>\n ' \
+                                     '                <h3>{title}</h3>\n'\
+                                     '                </div>\n' \
+                                     '                <div class="modal-body">\n{table}\n</div> ' \
+                                     '                </div>\n</div>\n</div>\n'.format(id=x, table=y, title=z)
+        BTN = lambda x, y, z: '                <button class="btn btn-xs {btn_class}" data-toggle="modal" data-target="#{id}">' \
+                            '{text}</button>'.format(btn_class=x, id=y, text=z)
+        same_index = 0
+        for i in range(len(s_html_list)):
+            mismatch_report = ''
+            color = ''
+            if not s_html_list[i]:
+                color = '#A9F5A9'
+            if not a_html_list[i]:
+                color = 'pink'
+            if color == '' and same_index < len(result_event_list):
+                result_event = result_event_list[same_index][1]
+                if result_event != 'Matched':
+                    modal_id = 'id_{0}_{1}'.format(anaLogInst[a_instance], same_index)
+                    mismatchBtn = BTN('btn-warning', modal_id, 'Event Parameter Mismatched')
+                    tbl_title = TR('warning', TH(['Success Event Parameter', 'Analysis Event Parameter']))
+                    tbl_tds = [TR('info', TH([x[0], x[1]])) for x in result_event]
+                    mismatch_tbl = TABLE(THEAD(tbl_title), TBODY(tbl_tds), 'modal-table')
+                    mismatch_report = ' \n{0}\n{1}'.format(mismatchBtn, MODAL(modal_id, mismatch_tbl, '{0} Event Parameters Comparision'.format(s_html_list[i])))
+                same_index += 1
+            event_entry = event_html.EVENT_TABLE_TMPL % dict(s_event=s_html_list[i], a_event=a_html_list[i], color=color, report=mismatch_report)
+            event_table += event_entry
+        output = event_html.HTML_TMPL % dict(event_table=event_table, call_instance_table=call_instance_entry,)
+        report_file_name = 'EventReport_' + str(s_instance) + '.html'
+        try:
+            with open(report_file_name,'wb') as f:
+                f.write(output.encode('utf-8'))
+        except Exception as e:
+            logger.warning('Write {0} failed: {1}'.format(report_file_name, e))
+
+        logger.warning('-----------------    End Analysis For Instance: {0}    -----------------'.format(anaLogInst[a_instance]))
+        return event_dict, result_event_list, mismatch_dict
+
+    # filter the difference for event parameter
+    def getFiltered(self, zipped):
+        if zipped[0] != zipped[1]:
+            return zipped
+
+    def splitEventParam(self, eventParamList):
+        resParamList = []
+        for eventpParam in eventParamList:
+            regx_remove = re.compile(r'(.*)\)', re.I)    # remove )
+            res = regx_remove.search(eventpParam)
+            if res:
+                eventpParam = res.group(1)
+            resParamList.append(eventpParam)
+        return resParamList
+
+    # get the same item list
+    def getReportList(self, diffList, successList, anaList):
+        s_List = []
+        a_List = []
+        s_index = 0
+        regDiffStart = re.compile(r'@@ -(\d+),', re.I)
+        for index in range(2, len(diffList)):
+            if diffList[index].startswith('-'):    # deleted item from success list
+                s_List.append(diffList[index].strip('-'))
+                a_List.append('')
+                s_index += 1
+            elif diffList[index].startswith('+'):    # added item from analysis list
+                s_List.append('')
+                a_List.append(diffList[index].strip('+'))
+            elif diffList[index].startswith('@@'):    # for example: @@ -4,7 +4,6 @@\n
+                diffSearch = regDiffStart.search(diffList[index])
+                if diffSearch:
+                    diffStart = int(diffSearch.group(1))-1
+                    for i in range(s_index, diffStart):    # add the same items to same list
+                        s_List.append(successList[i].strip())
+                        a_List.append(successList[i].strip())
+                        s_index += 1
+            else:
+                s_List.append(diffList[index].strip())    # add the same items to same list
+                a_List.append(diffList[index].strip())
+                s_index += 1
+        for index in range(s_index, len(successList)):    # add the remaining same items to same list
+            s_List.append(successList[index].strip())
+            a_List.append(successList[index].strip())
+        logger.debug('getSameList input: d:{0}, s:{1}, a:{2}'.format(diffList, successList, anaList))
+        logger.debug('getSameList output: s:{0}, a:{1}'.format(s_List, a_List))
+        return s_List, a_List
+
+    # get the same item list
+    def getSameList(self, diffList, successList, anaList):
+        sameList = []
+        delList = []
+        addList = []
+        s_index_list = []
+        a_index_list = []
+        regDiffStart = re.compile(r'@@ -(\d+),', re.I)
+        s_index = 0
+        a_index = 0
+        for index in range(2, len(diffList)):
+            if diffList[index].startswith('-'):    # deleted item from success list
+                delList.append(diffList[index].strip('-'))
+                s_index += 1
+            elif diffList[index].startswith('+'):    # added item from analysis list
+                addList.append(diffList[index].strip('+'))
+                a_index += 1
+            elif diffList[index].startswith('@@'):    # for example: @@ -4,7 +4,6 @@\n
+                diffSearch = regDiffStart.search(diffList[index])
+                if diffSearch:
+                    diffStart = int(diffSearch.group(1))-1
+                    for i in range(s_index, diffStart):    # add the same items to same list
+                        sameList.append(successList[i].strip())
+                        s_index_list.append(s_index)
+                        a_index_list.append(a_index)
+                        s_index += 1
+                        a_index += 1
+            else:
+                sameList.append(diffList[index].strip())    # add the same items to same list
+                s_index_list.append(s_index)
+                a_index_list.append(a_index)
+                s_index += 1
+                a_index += 1
+        for index in range(s_index, len(successList)):    # add the remaining same items to same list
+            sameList.append(successList[index].strip())
+            s_index_list.append(s_index)
+            a_index_list.append(a_index)
+            s_index += 1
+            a_index += 1
+        logger.debug('getSameList input: d:{0}, s:{1}, a:{2}'.format(diffList, successList, anaList))
+        logger.debug('getSameList output: s:{0}, s:{1}, a:{2}'.format(sameList, s_index_list, a_index_list))
+        return sameList, delList, addList, s_index_list, a_index_list
+
+    # get the different item list
+    def getDiffList(self, successList, anaList):
+        s_result_list = []
+        a_result_list = []
+        diff_list = []
+        ignore_list = []
+        for success in successList:
+            diff_found = 0
+            if success not in anaList:
+                param = success.split('=')[0]
+                if param in self.ignore_param_list or param.find('_Spare_') != -1 or param.find('_NSpare_') != -1:
+                    ignore_list.append(success)
+                else:
+                    for ana in anaList:
+                        if param == ana.split('=')[0]:
+                            diff_list.append(tuple([success, ana]))
+                            diff_found = 1
+                            anaList.remove(ana)
+                            a_result_list.append(ana)
+                            break
+                    if diff_found == 0:
+                        diff_list.append(tuple([success, '']))
+                s_result_list.append(success)
+        for ana in anaList:
+            if ana not in successList:
+                param = ana.split('=')[0]
+                if param in self.ignore_param_list or param.find('_Spare_') != -1 or param.find('_NSpare_') != -1:
+                    ignore_list.append(ana)
+                else:
+                    diff_list.append(tuple(['', ana]))
+                a_result_list.append(ana)
+        if ignore_list:
+            logger.warning('Ignored Param List: {0}'.format(ignore_list))
+        return diff_list, s_result_list, a_result_list
+
+def usage():
+    print('''
+Usage: Analyzer.py [opt]
+    -h        some help
+    -s        the success log file name
+    -a        the analysis log file name
+    -l        the trace level
+    ''')
+
+def files(curr_dir = '.', ext = '*.html'):
+    for i in glob.glob(os.path.join(curr_dir, ext)):
+        yield i
+
+def all_files(rootdir, ext):
+    for name in os.listdir(rootdir):
+        if os.path.isdir(os.path.join(rootdir, name)):
+            try:
+                for i in all_files(os.path.join(rootdir, name), ext):
+                    yield i
+            except:
+                pass
+    for i in files(rootdir, ext):
+        yield i
+
+def remove_all_files(rootdir, ext):
+    for i in all_files(rootdir, ext):
+        os.remove(i)
+
+if __name__ == '__main__':
+    logger = logging.getLogger(__name__)
+
+    s_log_name = None
+    a_log_name = None
+    trace_level = None
+    trace_input = 'WARNING'
+    opts, args = getopt.getopt(sys.argv[1:], "s:a:l:h")
+    for op, value in opts:
+        if op == '-h':
+            usage()
+            sys.exit()
+        elif op == '-s':
+            s_log_name = value
+        elif op == '-a':
+            a_log_name = value
+        elif op == '-l':
+            trace_input = value
+    if s_log_name == None or a_log_name == None:
+        print('Please specify the success and analysis log file')
+        usage()
+        sys.exit()
+    if trace_input.lower() == 'debug':
+        trace_level = logging.DEBUG
+    elif trace_input.lower() == 'warning':
+        trace_level = logging.WARNING
+    logging.basicConfig(level=trace_level,
+                #format='%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s',
+                format='%(message)s',
+                datefmt='%a, %d %b %Y %H:%M:%S',
+                filename='logAnalysis.log',
+                filemode='w')
+    try:
+        remove_all_files('.', 'EventReport_*.html')
+        os.remove('index.html')
+    except Exception as e:
+        logger.warning('Remove EventReport_*.html exception: {0}'.format(e))
+    log_ana = Analyzer('feature', 'test.json', s_log_name)
+    #successValueList = log_ana.getSuccessResult()
+    s_log_entry, s_log_inst = log_ana.parseLog(s_log_name)
+    a_log_entry, a_log_inst = log_ana.parseLog(a_log_name)
+    logger.debug('success: instance:{0}, entry:{1}'.format(s_log_inst, s_log_entry))
+    logger.debug('analysis: instance:{0}, entry:{1}'.format(a_log_inst, a_log_entry))
+    log_ana.compareResult(s_log_name, a_log_name, s_log_entry, s_log_inst, a_log_entry, a_log_inst)
